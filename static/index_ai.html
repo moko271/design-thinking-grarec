@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>話し合い整理グラレコ・AI版（フェーズ別）</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #tabs {
+      display: flex;
+      border-bottom: 1px solid #ccc;
+      background: #f7f7f7;
+    }
+    .tab {
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .tab.active {
+      background: #ffffff;
+      border-bottom: 2px solid #2196f3;
+      font-weight: bold;
+    }
+
+    #main {
+      flex: 1;
+      display: flex;
+    }
+
+    #student-view, #teacher-view {
+      display: none;
+      width: 100%;
+    }
+    #student-view.active, #teacher-view.active {
+      display: flex;
+    }
+
+    #left, #right {
+      box-sizing: border-box;
+      padding: 16px;
+    }
+    #left {
+      width: 35%;
+      border-right: 1px solid #ccc;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    #right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    h2 {
+      margin: 0 0 4px;
+      font-size: 18px;
+    }
+    h3 {
+      margin: 8px 0 4px;
+      font-size: 14px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 6px 8px;
+      box-sizing: border-box;
+    }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px;
+      resize: vertical;
+      min-height: 80px;
+      font-size: 12px;
+    }
+
+    /* 円形フェーズマップ */
+    #phase-circle-wrapper {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    #phaseCircle {
+      position: relative;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      border: 1px dashed #b0bec5;
+      background: #fafafa;
+      flex-shrink: 0;
+    }
+    .phase-dot {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      padding: 3px 8px;
+      font-size: 11px;
+      border-radius: 16px;
+      border: 1px solid #90caf9;
+      background: #e3f2fd;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .phase-dot.current {
+      background: #1976d2;
+      color: #fff;
+      border-color: #1565c0;
+      font-weight: bold;
+    }
+    .phase-dot.visited:not(.current) {
+      background: #bbdefb;
+      border-color: #64b5f6;
+    }
+    #phase-circle-center {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 10px;
+      color: #666;
+      text-align: center;
+      width: 70%;
+      line-height: 1.4;
+    }
+
+    #phase-caption-text {
+      font-size: 12px;
+      color: #555;
+    }
+
+    .keyword-zone-title {
+      font-size: 13px;
+      font-weight: bold;
+      margin-top: 4px;
+      margin-bottom: 2px;
+    }
+    .keyword-zone-title span.icon {
+      margin-right: 4px;
+    }
+    .keyword-zone-sub {
+      font-size: 11px;
+      color: #777;
+      margin-bottom: 4px;
+    }
+
+    #keywords-user,
+    #keywords-ai {
+      border: 1px solid #ccc;
+      min-height: 80px;
+      padding: 8px;
+      background: #fffef5;
+      overflow-y: auto;
+      margin-bottom: 4px;
+    }
+    #keywords-ai {
+      background: #f3f8ff;
+      border-style: dashed;
+    }
+
+    .keyword-input-row {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+    .keyword-input-row input {
+      flex: 1;
+    }
+
+    button {
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .keyword-card {
+      background: #fff8c6;
+      border: 1px solid #e0c050;
+      padding: 4px 8px;
+      margin-bottom: 4px;
+      cursor: grab;
+      font-size: 12px;
+      display: inline-block;
+    }
+
+    .keyword-card div.quote {
+      font-size: 10px;
+      color: #555;
+      margin-top: 2px;
+    }
+
+    .subject-badge {
+      display: inline-block;
+      margin-left: 4px;
+      padding: 1px 4px;
+      border-radius: 8px;
+      font-size: 10px;
+      background: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #a5d6a7;
+    }
+
+    #canvas-wrapper {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    #canvas-header {
+      margin-bottom: 4px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    #canvas-title-block {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+    }
+    #canvas-title-block input {
+      flex: 1;
+      padding: 4px 6px;
+    }
+    #worksheet-phase-label {
+      font-size: 12px;
+      color: #555;
+      white-space: nowrap;
+    }
+
+    #canvas {
+      flex: 1;
+      border: 1px solid #aaa;
+      position: relative;
+      background: #fdfdfd;
+      overflow: hidden;
+    }
+
+    .area {
+      position: absolute;
+      border: 1px dashed #999;
+      box-sizing: border-box;
+      padding: 4px;
+      font-size: 12px;
+      color: #555;
+      background: rgba(255,255,255,0.7);
+    }
+
+    /* さぐる・きづく */
+    .layout-saguru-kizuku #area-target {
+      top: 4px; left: 4px; right: 4px; height: 16%;
+      border-color: #9c27b0;
+      background: rgba(243, 229, 245, 0.9);
+    }
+    .layout-saguru-kizuku #area-fact {
+      top: 22%; left: 4px; right: 50%; height: 38%;
+      border-color: #4caf50;
+      background: rgba(232, 245, 233, 0.9);
+    }
+    .layout-saguru-kizuku #area-wish {
+      top: 22%; left: 50%; right: 4px; height: 24%;
+      border-color: #3f51b5;
+      background: rgba(232, 234, 246, 0.9);
+    }
+    .layout-saguru-kizuku #area-interpret {
+      top: 48%; left: 50%; right: 4px; height: 26%;
+      border-color: #ff9800;
+      background: rgba(255, 243, 224, 0.9);
+    }
+
+    /* ひらめく */
+    .layout-hirameku #hirameku-core {
+      top: 35%; left: 30%; right: 30%; height: 30%;
+      border-color: #3f51b5;
+      background: rgba(232, 234, 246, 0.95);
+    }
+    .layout-hirameku .idea-slot {
+      position: absolute;
+      width: 22%;
+      height: 26%;
+      border: 1px dashed #2196f3;
+      background: rgba(227, 242, 253, 0.8);
+      box-sizing: border-box;
+      padding: 4px;
+      font-size: 12px;
+      color: #555;
+    }
+
+    /* つくる */
+    .layout-tsukuru #area-idea-name {
+      top: 4px; left: 4px; right: 40%; height: 14%;
+      border-color: #673ab7;
+      background: rgba(237, 231, 246, 0.95);
+    }
+    .layout-tsukuru #area-core-problem {
+      top: 4px; left: 60%; right: 4px; height: 14%;
+      border-color: #3f51b5;
+      background: rgba(232, 234, 246, 0.95);
+    }
+    .layout-tsukuru #area-look {
+      top: 22%; left: 4px; width: 48%; height: 32%;
+      border-color: #009688;
+      background: rgba(224, 242, 241, 0.9);
+    }
+    .layout-tsukuru #area-size {
+      top: 22%; left: 52%; right: 4px; height: 32%;
+      border-color: #795548;
+      background: rgba(239, 235, 233, 0.9);
+    }
+    .layout-tsukuru #area-function {
+      top: 58%; left: 4px; width: 48%; height: 34%;
+      border-color: #2196f3;
+      background: rgba(227, 242, 253, 0.9);
+    }
+    .layout-tsukuru #area-feature {
+      top: 58%; left: 52%; right: 4px; height: 34%;
+      border-color: #ff9800;
+      background: rgba(255, 243, 224, 0.9);
+    }
+
+    /* ためす */
+    .layout-tamesu #area-good {
+      top: 4px; left: 4px; width: 32%; bottom: 4px;
+      border-color: #4caf50;
+      background: rgba(232, 245, 233, 0.9);
+    }
+    .layout-tamesu #area-better {
+      top: 4px; left: 34%; width: 32%; bottom: 4px;
+      border-color: #ff9800;
+      background: rgba(255, 243, 224, 0.9);
+    }
+    .layout-tamesu #area-next {
+      top: 4px; left: 66%; right: 4px; bottom: 4px;
+      border-color: #2196f3;
+      background: rgba(227, 242, 253, 0.9);
+    }
+
+    .area-label {
+      font-weight: bold;
+      font-size: 12px;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .area-label span.icon {
+      font-size: 14px;
+    }
+    .area-hint {
+      font-size: 10px;
+      color: #555;
+    }
+
+    .note {
+      position: absolute;
+      background: #fff9c4;
+      border: 1px solid #f0c000;
+      padding: 4px 6px;
+      font-size: 12px;
+      cursor: move;
+      max-width: 160px;
+      word-wrap: break-word;
+      box-shadow: 1px 1px 2px rgba(0,0,0,0.15);
+    }
+
+    #step-guide {
+      border-top: 1px solid #ddd;
+      padding: 6px 10px;
+      font-size: 12px;
+      background: #fafafa;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .step {
+      padding: 4px 6px;
+      border-radius: 4px;
+      background: #e3f2fd;
+      border: 1px solid #90caf9;
+    }
+    .step span.label {
+      font-weight: bold;
+      margin-right: 4px;
+    }
+
+    .next-phase-buttons {
+      font-size: 11px;
+      text-align: right;
+      margin-bottom: 4px;
+    }
+    .next-phase-buttons button {
+      font-size: 11px;
+      padding: 2px 6px;
+      margin-left: 4px;
+      border-radius: 12px;
+      border: 1px solid #90caf9;
+      background: #e3f2fd;
+      cursor: pointer;
+    }
+
+    /* 先生ビュー簡略 */
+    #teacher-left {
+      width: 30%;
+      border-right: 1px solid #ccc;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    #teacher-right {
+      flex: 1;
+      padding: 16px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .team-item {
+      padding: 6px 8px;
+      border: 1px solid #ccc;
+      margin-bottom: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      border-radius: 4px;
+      background: #fff;
+    }
+    .team-item.active {
+      background: #e3f2fd;
+      border-color: #64b5f6;
+    }
+    .teacher-subject-badge {
+      display: inline-block;
+      margin-left: 4px;
+      padding: 1px 4px;
+      border-radius: 8px;
+      font-size: 10px;
+      background: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #a5d6a7;
+    }
+  </style>
+</head>
+<body>
+  <div id="tabs">
+    <div class="tab active" data-target="student-view">生徒用</div>
+    <div class="tab" data-target="teacher-view">先生用（デモ）</div>
+  </div>
+
+  <div id="main">
+    <!-- 生徒ビュー -->
+    <div id="student-view" class="active">
+      <div id="left">
+        <div>
+          <h2>① 話し合いのテーマ</h2>
+          <input id="topicInput" type="text" placeholder="例：AIが探究の自走を促進させるためには？" />
+        </div>
+
+        <div>
+          <h3>② フェーズ選択（円マップ）</h3>
+          <div id="phase-circle-wrapper">
+            <div id="phaseCircle">
+              <div id="phase-circle-center">
+                フェーズはぐるぐる<br>行き来してOK
+              </div>
+              <div class="phase-dot" data-phase="saguru"  id="dot-saguru">①さぐる</div>
+              <div class="phase-dot" data-phase="kizuku"  id="dot-kizuku">②きづく</div>
+              <div class="phase-dot" data-phase="hirameku" id="dot-hirameku">③ひらめく</div>
+              <div class="phase-dot" data-phase="tsukuru" id="dot-tsukuru">④つくる</div>
+              <div class="phase-dot" data-phase="tamesu"  id="dot-tamesu">⑤ためす</div>
+            </div>
+            <div id="phase-caption-text">
+              円のボタンをクリックして、今どのフェーズで考えるか決めます。
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3>③ メモ（発言・文字起こしを書き留める）</h3>
+          <textarea id="rawMemo" placeholder="発言メモや文字起こし結果がここに入ります"></textarea>
+
+          <div style="margin-top:4px; font-size:12px;">
+            音声ファイルを選択（m4a / wav など）：
+            <input id="audioFileInput" type="file" accept="audio/*" />
+          </div>
+          <div style="margin-top:4px; font-size:12px;">
+            <button id="uploadAudioBtn">音声を文字起こしする</button>
+            <span id="transcribeStatus" style="margin-left:8px; color:#555;"></span>
+          </div>
+
+          <div style="margin-top:8px; font-size:12px; border-top:1px dashed #ccc; padding-top:4px;">
+            ブラウザで直接録音する：
+            <button id="startRecordBtn">録音開始</button>
+            <button id="stopRecordBtn" disabled>停止して文字起こし</button>
+            <span id="recordStatus" style="margin-left:8px; color:#c62828;"></span>
+          </div>
+
+          <div style="margin-top:8px; font-size:12px;">
+            <button id="aiKeywordBtn">AIでフェーズに合ったカードを出す</button>
+            <span id="aiKeywordStatus" style="margin-left:8px; color:#555;"></span>
+          </div>
+        </div>
+
+        <div>
+          <h3>④ 重要そうなキーワード／フレーズ</h3>
+          <div class="keyword-input-row">
+            <input id="keywordInput" type="text" placeholder="キーワードを1つ入力（例：内発的動機づけ）" />
+            <button id="addKeywordBtn">追加</button>
+          </div>
+
+          <div style="font-size:12px; margin-bottom:4px;">
+            このキーワードに紐づける教科タグ：
+            <select id="subjectSelect">
+              <option value="">（なし）</option>
+              <option value="社会">社会</option>
+              <option value="理科">理科</option>
+              <option value="国語">国語</option>
+              <option value="数学">数学</option>
+              <option value="総合・探究">総合・探究</option>
+            </select>
+            <span style="margin-left:4px; color:#777;">
+              ※ この選択は「次に追加するキーワード」にだけ反映されます。
+            </span>
+          </div>
+
+          <div class="keyword-zone-title">
+            <span class="icon">✍️</span>自分で見つけた／AIからもらったカード
+          </div>
+          <div class="keyword-zone-sub">
+            メモやAIのカードを見ながら、気になった言葉・フレーズを1行ずつ追加する。
+          </div>
+          <div id="keywords-user"></div>
+
+          <div class="keyword-zone-title" style="margin-top:8px;">
+            <span class="icon">✨</span>AIの提案カード（ログ用）
+          </div>
+          <div class="keyword-zone-sub">
+            直近でAIが提案したカードを記録しておくエリア（ドラッグ元としても使えます）。
+          </div>
+          <div id="keywords-ai"></div>
+        </div>
+      </div>
+
+      <div id="right">
+        <div id="canvas-wrapper">
+          <div id="canvas-header">
+            <div id="canvas-title-block">
+              <span>⑤ タイトル：</span>
+              <input id="canvasTitle" type="text" placeholder="話し合い／プロジェクトのタイトルを書く" />
+            </div>
+            <div id="worksheet-phase-label">
+              ワークシート：さぐる・気づく・たてる
+            </div>
+          </div>
+
+          <div class="next-phase-buttons" id="nextPhaseButtons"></div>
+
+          <div id="canvas" class="layout-saguru-kizuku">
+            <!-- さぐる・きづく -->
+            <div id="area-target" class="area">
+              <div class="area-label"><span class="icon">🎯</span>ターゲット</div>
+              <div class="area-hint">誰の困りごとを考えている？（例：お母さん、中学生など）</div>
+            </div>
+            <div id="area-fact" class="area">
+              <div class="area-label"><span class="icon">📌</span>インタビュー・行動観察（事実）</div>
+              <div class="area-hint">実際の発言や様子のカードを貼る。</div>
+            </div>
+            <div id="area-wish" class="area">
+              <div class="area-label"><span class="icon">❓</span>本当の願いごと・困りごと</div>
+              <div class="area-hint">※ 一行の問いにまとめる欄。カードをヒントに自分の言葉で書く。</div>
+              <input id="coreProblemInput" type="text"
+                     placeholder="例：どうすれば、〜できるだろうか？"
+                     style="width:100%; margin-top:4px; font-size:12px; padding:4px 6px; box-sizing:border-box;" />
+            </div>
+            <div id="area-interpret" class="area">
+              <div class="area-label"><span class="icon">🧩</span>願いごと・困りごと（解釈）</div>
+              <div class="area-hint">「〜なのかも」「〜だからかも」と感じたことのカードを貼る。</div>
+            </div>
+
+            <!-- ひらめく -->
+            <div id="hirameku-core" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">🎯</span>ターゲットの本当の課題</div>
+              <div class="area-hint">さぐる・きづくフェーズで決めた問いをここに置く。</div>
+              <div id="hiramekuCoreProblemText"
+                   style="margin-top:4px; font-size:12px; padding:4px 6px; background:#fff; border-radius:4px; min-height:18px;"></div>
+            </div>
+            <div id="hirameku-idea-slot-1" class="idea-slot" style="display:none;">
+              <div class="area-label"><span class="icon">💡</span>アイデア</div>
+              <div class="area-hint">思いついた工夫のカードを貼る。</div>
+            </div>
+            <div id="hirameku-idea-slot-2" class="idea-slot" style="display:none;">
+              <div class="area-label"><span class="icon">💡</span>アイデア</div>
+              <div class="area-hint">別の視点のアイデアも歓迎。</div>
+            </div>
+            <div id="hirameku-idea-slot-3" class="idea-slot" style="display:none;">
+              <div class="area-label"><span class="icon">💡</span>アイデア</div>
+              <div class="area-hint">小さな一歩のアイデアもOK。</div>
+            </div>
+            <div id="hirameku-idea-slot-4" class="idea-slot" style="display:none;">
+              <div class="area-label"><span class="icon">💡</span>アイデア</div>
+              <div class="area-hint">ターゲットの気持ちに寄りそった案。</div>
+            </div>
+
+            <!-- つくる -->
+            <div id="area-idea-name" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">🏷</span>アイデアの名前</div>
+              <div class="area-hint">例：安眠ムードBOX など。</div>
+            </div>
+            <div id="area-core-problem" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">🎯</span>ターゲットの本当の課題</div>
+              <div class="area-hint">発表まとめや前のフェーズと同じ問いを表示。</div>
+              <div id="coreProblemDisplay"
+                   style="margin-top:4px; font-size:12px; padding:4px 6px; background:#fff; border-radius:4px; min-height:18px;"></div>
+            </div>
+            <div id="area-look" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">👀</span>見た目</div>
+              <div class="area-hint">形・色・雰囲気などのカード。</div>
+            </div>
+            <div id="area-size" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">📏</span>大きさ</div>
+              <div class="area-hint">どれくらいの大きさか・持ち運びやすさなど。</div>
+            </div>
+            <div id="area-function" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">⚙️</span>機能</div>
+              <div class="area-hint">どんな機能で課題を解決するか。</div>
+            </div>
+            <div id="area-feature" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">⭐</span>特徴・こだわり</div>
+              <div class="area-hint">他と違うポイント・工夫した点。</div>
+            </div>
+
+            <!-- ためす -->
+            <div id="area-good" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">👍</span>良かったところ</div>
+              <div class="area-hint">ユーザーにほめられた点・うまくいった点。</div>
+            </div>
+            <div id="area-better" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">🔧</span>もっとこうだったら良いところ</div>
+              <div class="area-hint">改善のアイデアや指摘のカード。</div>
+            </div>
+            <div id="area-next" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">➡️</span>次に取り組むこと</div>
+              <div class="area-hint">次のサイクルで試したい一歩。</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="step-guide">
+          <div class="step"><span class="label">STEP1</span> テーマを書く</div>
+          <div class="step"><span class="label">STEP2</span> 円からフェーズを選ぶ</div>
+          <div class="step"><span class="label">STEP3</span> 音声を文字起こし or メモを書く</div>
+          <div class="step"><span class="label">STEP4</span> AIでカードを出し、ワークシートに貼って整理</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 先生ビュー（ダミー） -->
+    <div id="teacher-view">
+      <div id="teacher-left">
+        <h2>先生用：班の一覧</h2>
+        <p style="font-size:12px;color:#666;">
+          生徒が作成したグラレコ（ワークシート）を班ごとに一覧で見る想定のデモです。
+        </p>
+        <div id="teamList">
+          <div class="team-item active" data-team="A">A班：AIが探究の自走を促進させるには？</div>
+          <div class="team-item" data-team="B">B班：給食の残菜を減らすには？</div>
+          <div class="team-item" data-team="C">C班：学校図書館をもっと使ってもらうには？</div>
+        </div>
+      </div>
+      <div id="teacher-right">
+        <div id="teacher-summary" style="border:1px solid #ccc;padding:8px;background:#fafafa;font-size:13px;">
+          <h3>選択中の班のサマリ</h3>
+          <div id="teacherSubjectBadge" style="font-size:12px; margin-bottom:4px;">
+            教科タグ：
+            <span class="teacher-subject-badge">探究</span>
+            <span class="teacher-subject-badge">社会</span>
+          </div>
+          <div id="summaryText">
+            事実：3枚／原因：2枚／アイデア：5枚（仮のダミーデータ）<br/>
+            ・事実がやや少なめ<br/>
+            ・アイデアが多いが、原因とつながっていないものもありそう
+          </div>
+        </div>
+        <div id="teacher-feedback" style="border:1px solid #ccc;padding:8px;background:#fffef5;font-size:13px;">
+          <h3>先生への声かけのヒント（例）</h3>
+          <ul id="feedbackList">
+            <li>事実・現状のカードをもう少し増やすよう問いかける。</li>
+            <li>アイデアごとに「どの原因に効きそうか？」を聞いてみる。</li>
+            <li>次に試したい一歩を1つ選ばせ、期限や役割を決めさせる。</li>
+          </ul>
+          <p style="font-size:11px;color:#666;">
+            ※ 現段階ではダミーの内容ですが、将来は生徒のグラレコ内容から自動生成する想定です。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// タブ切り替え
+const tabs = document.querySelectorAll('.tab');
+const studentView = document.getElementById('student-view');
+const teacherView = document.getElementById('teacher-view');
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => {
+    tabs.forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const target = tab.dataset.target;
+    if (target === 'student-view') {
+      studentView.classList.add('active');
+      teacherView.classList.remove('active');
+    } else {
+      studentView.classList.remove('active');
+      teacherView.classList.add('active');
+    }
+  });
+});
+
+// 円マップ
+const phaseDots = {
+  saguru:  document.getElementById("dot-saguru"),
+  kizuku:  document.getElementById("dot-kizuku"),
+  hirameku:document.getElementById("dot-hirameku"),
+  tsukuru: document.getElementById("dot-tsukuru"),
+  tamesu:  document.getElementById("dot-tamesu")
+};
+let currentPhase = "saguru";
+const visitedPhases = new Set(["saguru"]);
+
+(function layoutPhaseDots() {
+  const circle = document.getElementById("phaseCircle");
+  const w = circle.clientWidth || 180;
+  const h = circle.clientHeight || 180;
+  const cx = w / 2;
+  const cy = h / 2;
+  const r = Math.min(w, h) * 0.42;
+  const order = ["saguru","kizuku","hirameku","tsukuru","tamesu"];
+  order.forEach((ph, idx) => {
+    const angle = -Math.PI / 2 + (2 * Math.PI * idx) / order.length; // 12時から時計回り
+    const x = cx + r * Math.cos(angle);
+    const y = cy + r * Math.sin(angle);
+    const dot = phaseDots[ph];
+    if (dot) {
+      dot.style.left = x + "px";
+      dot.style.top  = y + "px";
+    }
+  });
+})();
+
+const worksheetPhaseLabel = document.getElementById("worksheet-phase-label");
+const nextPhaseButtons = document.getElementById("nextPhaseButtons");
+
+// フェーズ説明・おすすめ遷移
+const phaseDescriptions = {
+  saguru: "さぐる：ターゲットと現状の困りごと・観察をワークシートに整理します（6〜10枚程度）。",
+  kizuku: "きづく：本当に解きたい問題・問いを絞り込みます（3〜5枚程度）。",
+  hirameku: "ひらめく：ターゲットの本当の課題を中心に、解決アイデアを多めに出します（8〜12枚程度）。",
+  tsukuru: "つくる：選んだアイデアの見た目・大きさ・機能・特徴を整理します（3〜7枚程度）。",
+  tamesu: "ためす：良かった点／もっと良くできそうな点／次にすることをカードで残します（4〜6枚程度）。"
+};
+const nextPhaseOptions = {
+  saguru:  { forward: "kizuku",  back: null },
+  kizuku:  { forward: "hirameku",back: "saguru" },
+  hirameku:{ forward: "tsukuru", back: "kizuku" },
+  tsukuru: { forward: "tamesu",  back: "hirameku" },
+  tamesu:  { forward: "saguru",  back: "kizuku" }
+};
+function phaseLabel(p){
+  return {saguru:"①さぐる",kizuku:"②きづく",hirameku:"③ひらめく",tsukuru:"④つくる",tamesu:"⑤ためす"}[p] || p;
+}
+
+// 本当の課題共有
+const coreProblemInput = document.getElementById("coreProblemInput");
+const coreProblemDisplay = document.getElementById("coreProblemDisplay");
+const hiramekuCoreProblemText = document.getElementById("hiramekuCoreProblemText");
+let coreProblemText = "";
+if (coreProblemInput) {
+  coreProblemInput.addEventListener("input", () => {
+    coreProblemText = coreProblemInput.value;
+    if (coreProblemDisplay) coreProblemDisplay.textContent = coreProblemText;
+    if (hiramekuCoreProblemText) hiramekuCoreProblemText.textContent = coreProblemText;
+  });
+}
+
+// キャンバスレイアウト
+const canvasEl = document.getElementById("canvas");
+const layoutClasses = ["layout-saguru-kizuku","layout-hirameku","layout-tsukuru","layout-tamesu"];
+const areaTarget      = document.getElementById("area-target");
+const areaFact        = document.getElementById("area-fact");
+const areaWish        = document.getElementById("area-wish");
+const areaInterpret   = document.getElementById("area-interpret");
+const hiramekuCore    = document.getElementById("hirameku-core");
+const ideaSlots = [
+  document.getElementById("hirameku-idea-slot-1"),
+  document.getElementById("hirameku-idea-slot-2"),
+  document.getElementById("hirameku-idea-slot-3"),
+  document.getElementById("hirameku-idea-slot-4")
+];
+const areaIdeaName    = document.getElementById("area-idea-name");
+const areaCoreProblem = document.getElementById("area-core-problem");
+const areaLook        = document.getElementById("area-look");
+const areaSize        = document.getElementById("area-size");
+const areaFunction    = document.getElementById("area-function");
+const areaFeature     = document.getElementById("area-feature");
+const areaGood        = document.getElementById("area-good");
+const areaBetter      = document.getElementById("area-better");
+const areaNext        = document.getElementById("area-next");
+
+function setWorksheetLayout(phase) {
+  layoutClasses.forEach(c => canvasEl.classList.remove(c));
+  [
+    areaTarget,areaFact,areaWish,areaInterpret,
+    hiramekuCore,...ideaSlots,
+    areaIdeaName,areaCoreProblem,areaLook,areaSize,areaFunction,areaFeature,
+    areaGood,areaBetter,areaNext
+  ].forEach(el => { if(el) el.style.display="none"; });
+
+  if (phase==="saguru" || phase==="kizuku") {
+    canvasEl.classList.add("layout-saguru-kizuku");
+    if (areaTarget) areaTarget.style.display="block";
+    if (areaFact) areaFact.style.display="block";
+    if (areaWish) areaWish.style.display="block";
+    if (areaInterpret) areaInterpret.style.display="block";
+    worksheetPhaseLabel.textContent = "ワークシート：さぐる・気づく・たてる";
+  } else if (phase==="hirameku") {
+    canvasEl.classList.add("layout-hirameku");
+    if (hiramekuCore) hiramekuCore.style.display="block";
+    ideaSlots.forEach(el=>{ if(el) el.style.display="block"; });
+    const w = canvasEl.clientWidth || 800;
+    const h = canvasEl.clientHeight || 400;
+    const mx = w*0.06, my=h*0.06;
+    ideaSlots[0].style.left  = mx+"px";  ideaSlots[0].style.top   = my+"px";
+    ideaSlots[1].style.right = mx+"px";  ideaSlots[1].style.top   = my+"px"; ideaSlots[1].style.left="";
+    ideaSlots[2].style.left  = mx+"px";  ideaSlots[2].style.bottom= my+"px"; ideaSlots[2].style.top="";
+    ideaSlots[3].style.right = mx+"px";  ideaSlots[3].style.bottom= my+"px"; ideaSlots[3].style.top="";
+    worksheetPhaseLabel.textContent = "ワークシート：③ひらめく（アイデア出し）";
+  } else if (phase==="tsukuru") {
+    canvasEl.classList.add("layout-tsukuru");
+    if (areaIdeaName) areaIdeaName.style.display="block";
+    if (areaCoreProblem) areaCoreProblem.style.display="block";
+    if (areaLook) areaLook.style.display="block";
+    if (areaSize) areaSize.style.display="block";
+    if (areaFunction) areaFunction.style.display="block";
+    if (areaFeature) areaFeature.style.display="block";
+    worksheetPhaseLabel.textContent = "ワークシート：④つくる（プロトタイプ）";
+  } else if (phase==="tamesu") {
+    canvasEl.classList.add("layout-tamesu");
+    if (areaGood) areaGood.style.display="block";
+    if (areaBetter) areaBetter.style.display="block";
+    if (areaNext) areaNext.style.display="block";
+    worksheetPhaseLabel.textContent = "ワークシート：⑤ためす（テストと振り返り）";
+  }
+
+  if (coreProblemInput) coreProblemInput.value = coreProblemText;
+  updateNotesVisibility();
+}
+
+function updatePhaseDotsHighlight() {
+  Object.entries(phaseDots).forEach(([ph,dot])=>{
+    dot.classList.remove("current","visited");
+    if (ph===currentPhase) dot.classList.add("current");
+    else if (visitedPhases.has(ph)) dot.classList.add("visited");
+  });
+}
+
+function updateNextPhaseButtons() {
+  const cfg = nextPhaseOptions[currentPhase];
+  nextPhaseButtons.innerHTML = "";
+  if (!cfg) return;
+  const span = document.createElement("span");
+  span.textContent = "▶ 次の一歩（例）：";
+  nextPhaseButtons.appendChild(span);
+  if (cfg.forward) {
+    const bF = document.createElement("button");
+    bF.textContent = "次へ：「" + phaseLabel(cfg.forward) + "」";
+    bF.onclick = () => changePhase(cfg.forward);
+    nextPhaseButtons.appendChild(bF);
+  }
+  if (cfg.back) {
+    const bB = document.createElement("button");
+    bB.textContent = "戻る：「" + phaseLabel(cfg.back) + "」";
+    bB.onclick = () => changePhase(cfg.back);
+    nextPhaseButtons.appendChild(bB);
+  }
+}
+
+function changePhase(newPhase) {
+  currentPhase = newPhase;
+  visitedPhases.add(newPhase);
+  setWorksheetLayout(newPhase);
+  updatePhaseDotsHighlight();
+  updateNextPhaseButtons();
+}
+
+// フェーズごとに付箋を非表示／表示
+function updateNotesVisibility() {
+  document.querySelectorAll(".note").forEach(note => {
+    const notePhase = note.dataset.phase || "";
+    note.style.display = (notePhase === currentPhase) ? "block" : "none";
+  });
+}
+
+// 円ボタン
+Object.values(phaseDots).forEach(dot=>{
+  dot.addEventListener("click",()=>{
+    const ph = dot.dataset.phase;
+    if (ph) changePhase(ph);
+  });
+});
+
+// 初期化
+changePhase("saguru");
+
+// ==== キーワード入力 ====
+const keywordInput       = document.getElementById("keywordInput");
+const addKeywordBtn      = document.getElementById("addKeywordBtn");
+const keywordsUserEl     = document.getElementById("keywords-user");
+const keywordsAiEl       = document.getElementById("keywords-ai");
+const subjectSelect      = document.getElementById("subjectSelect");
+
+addKeywordBtn.onclick = () => {
+  const text = keywordInput.value.trim();
+  if (!text) return;
+  const subject = subjectSelect.value;
+
+  const card = document.createElement("div");
+  card.className = "keyword-card";
+  card.draggable = true;
+  card.dataset.keyword = text;
+  card.dataset.subject = subject;
+
+  const spanMain = document.createElement("div");
+  spanMain.textContent = text;
+  card.appendChild(spanMain);
+
+  if (subject) {
+    const spanBadge = document.createElement("span");
+    spanBadge.className = "subject-badge";
+    spanBadge.textContent = subject;
+    card.appendChild(spanBadge);
+  }
+
+  keywordsUserEl.appendChild(card);
+  keywordInput.value = "";
+};
+
+// ==== 音声アップロード ====
+const rawMemoEl          = document.getElementById("rawMemo");
+const audioFileInput     = document.getElementById("audioFileInput");
+const uploadAudioBtn     = document.getElementById("uploadAudioBtn");
+const transcribeStatus   = document.getElementById("transcribeStatus");
+
+uploadAudioBtn.onclick = async () => {
+  const file = audioFileInput.files[0];
+  if (!file) {
+    transcribeStatus.textContent = "音声ファイルを選択してください。";
+    return;
+  }
+  transcribeStatus.textContent = "音声を送信中…";
+  uploadAudioBtn.disabled = true;
+  try {
+    const formData = new FormData();
+    formData.append("audio", file);
+    const res = await fetch("/api/transcribe", {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      const msg = data.error || `サーバーエラー (${res.status})`;
+      transcribeStatus.textContent = "文字起こしエラー: " + msg;
+      uploadAudioBtn.disabled = false;
+      return;
+    }
+    const text = data.text || "";
+    if (text) {
+      if (rawMemoEl.value && !rawMemoEl.value.endsWith("\n")) rawMemoEl.value += "\n";
+      rawMemoEl.value += text;
+      transcribeStatus.textContent = "文字起こし完了：メモ欄に追記しました。";
+    } else {
+      transcribeStatus.textContent = "テキストが空でした。音声が短すぎるかもしれません。";
+    }
+  } catch (e) {
+    transcribeStatus.textContent = "通信エラー: " + e;
+  } finally {
+    uploadAudioBtn.disabled = false;
+  }
+};
+
+// ==== ブラウザ録音 ====
+const startRecordBtn = document.getElementById("startRecordBtn");
+const stopRecordBtn  = document.getElementById("stopRecordBtn");
+const recordStatus   = document.getElementById("recordStatus");
+let mediaRecorder = null;
+let recordedChunks = [];
+
+startRecordBtn.onclick = async () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") return;
+  recordStatus.textContent = "マイクへのアクセスを許可してください…";
+  startRecordBtn.disabled = true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+    mediaRecorder.ondataavailable = e => {
+      if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+    };
+    mediaRecorder.onstart = () => {
+      recordStatus.textContent = "録音中…（話し合いをしてください）";
+      stopRecordBtn.disabled = false;
+    };
+    mediaRecorder.onstop = async () => {
+      recordStatus.textContent = "録音終了。文字起こし中…";
+      stopRecordBtn.disabled = true;
+      const blob = new Blob(recordedChunks, { type: "audio/webm" });
+      recordedChunks = [];
+      try {
+        const formData = new FormData();
+        formData.append("audio", blob, "recorded.webm");
+        const res = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          const msg = data.error || `サーバーエラー (${res.status})`;
+          recordStatus.textContent = "文字起こしエラー: " + msg;
+          return;
+        }
+        const text = data.text || "";
+        if (text) {
+          if (rawMemoEl.value && !rawMemoEl.value.endsWith("\n")) rawMemoEl.value += "\n";
+          rawMemoEl.value += text;
+          recordStatus.textContent = "文字起こし完了：メモ欄に追記しました。";
+        } else {
+          recordStatus.textContent = "テキストが空でした。話し合いが短すぎたかもしれません。";
+        }
+      } catch (e) {
+        recordStatus.textContent = "通信エラー: " + e;
+      } finally {
+        if (mediaRecorder && mediaRecorder.stream) {
+          mediaRecorder.stream.getTracks().forEach(t => t.stop());
+        }
+        mediaRecorder = null;
+        startRecordBtn.disabled = false;
+      }
+    };
+    mediaRecorder.start();
+  } catch (e) {
+    console.error(e);
+    recordStatus.textContent = "マイクが利用できません（許可されていないか、端末が非対応です）。";
+    startRecordBtn.disabled = false;
+  }
+};
+
+stopRecordBtn.onclick = () => {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+    recordStatus.textContent = "録音停止処理中…";
+  }
+};
+
+// ==== AI キーワード抽出（キーワード＋元セリフ）====
+const aiKeywordBtn    = document.getElementById("aiKeywordBtn");
+const aiKeywordStatus = document.getElementById("aiKeywordStatus");
+
+aiKeywordBtn.onclick = async () => {
+  const memoText = rawMemoEl.value.trim();
+  if (!memoText) {
+    aiKeywordStatus.textContent = "メモが空です。先に文字起こしやメモ入力をしてください。";
+    return;
+  }
+  const phase = currentPhase || "saguru";
+  aiKeywordStatus.textContent = "AIに送信中…";
+  aiKeywordBtn.disabled = true;
+  try {
+    const res = await fetch("/api/extract_keywords", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memo: memoText, phase: phase })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      const msg = data.error || `サーバーエラー (${res.status})`;
+      aiKeywordStatus.textContent = "エラー: " + msg;
+      aiKeywordBtn.disabled = false;
+      return;
+    }
+    aiKeywordStatus.textContent = "カードを左の『自分で見つけた／AIからもらったカード』に追加しました。";
+
+    keywordsAiEl.innerHTML = "";
+
+    (data.keywords || []).forEach(item => {
+      const kw    = typeof item === "string" ? item : (item.keyword || "");
+      const quote = (typeof item === "object" && item.quote) ? item.quote : "";
+
+      // ログ用
+      const logCard = document.createElement("div");
+      logCard.className = "keyword-card";
+      logCard.draggable = true;
+      logCard.dataset.keyword = kw;
+      logCard.dataset.subject = "";
+      const logMain = document.createElement("div");
+      logMain.textContent = kw;
+      logCard.appendChild(logMain);
+      if (quote) {
+        const logQuote = document.createElement("div");
+        logQuote.className = "quote";
+        logQuote.textContent = "「" + quote + "」";
+        logCard.appendChild(logQuote);
+      }
+      keywordsAiEl.appendChild(logCard);
+
+      // 実際に使うカード
+      const card = document.createElement("div");
+      card.className = "keyword-card";
+      card.draggable = true;
+      card.dataset.keyword = kw;
+      card.dataset.subject = "";
+      const spanMain = document.createElement("div");
+      spanMain.textContent = kw;
+      card.appendChild(spanMain);
+      if (quote) {
+        const spanQuote = document.createElement("div");
+        spanQuote.className = "quote";
+        spanQuote.textContent = "「" + quote + "」";
+        card.appendChild(spanQuote);
+      }
+      keywordsUserEl.appendChild(card);
+    });
+  } catch (e) {
+    aiKeywordStatus.textContent = "通信エラー: " + e;
+  } finally {
+    aiKeywordBtn.disabled = false;
+  }
+};
+
+// ==== ドラッグ＆ドロップ ====
+function setupDragSource(container) {
+  container.addEventListener("dragstart", (e) => {
+    if (e.target.classList.contains("keyword-card")) {
+      e.dataTransfer.setData("text/plain", e.target.dataset.keyword);
+      e.dataTransfer.setData("subject", e.target.dataset.subject || "");
+    }
+  });
+}
+setupDragSource(keywordsUserEl);
+setupDragSource(keywordsAiEl);
+
+canvasEl.addEventListener("dragover", e => e.preventDefault());
+canvasEl.addEventListener("drop", (e) => {
+  e.preventDefault();
+  const kw = e.dataTransfer.getData("text/plain");
+  if (!kw) return;
+  const subject = e.dataTransfer.getData("subject") || "";
+  const rect = canvasEl.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  const note = document.createElement("div");
+  note.className = "note";
+  note.dataset.subject = subject;
+  note.dataset.phase = currentPhase;  // このフェーズの付箋として記録
+  note.style.left = x + "px";
+  note.style.top  = y + "px";
+
+  const spanText = document.createElement("div");
+  spanText.textContent = kw;
+  note.appendChild(spanText);
+
+  if (subject) {
+    const spanBadge = document.createElement("div");
+    spanBadge.className = "subject-badge";
+    spanBadge.textContent = subject;
+    note.appendChild(spanBadge);
+  }
+
+  canvasEl.appendChild(note);
+  makeNoteDraggable(note);
+  updateNotesVisibility();
+});
+
+function makeNoteDraggable(note) {
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let origLeft = 0;
+  let origTop = 0;
+  note.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    origLeft = note.offsetLeft;
+    origTop = note.offsetTop;
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  });
+  function onMouseMove(e) {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    let newLeft = origLeft + dx;
+    let newTop  = origTop + dy;
+    const rect = canvasEl.getBoundingClientRect();
+    const maxLeft = rect.width - note.offsetWidth;
+    const maxTop  = rect.height - note.offsetHeight;
+    newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+    newTop  = Math.max(0, Math.min(newTop, maxTop));
+    note.style.left = newLeft + "px";
+    note.style.top  = newTop + "px";
+  }
+  function onMouseUp() {
+    isDragging = false;
+    document.removeEventListener("mousemove", onMouseMove);
+    document.removeEventListener("mouseup", onMouseUp);
+  }
+}
+
+// 先生ビューのダミー切り替え
+const teamItems = document.querySelectorAll(".team-item");
+const summaryText = document.getElementById("summaryText");
+const feedbackList = document.getElementById("feedbackList");
+const teacherSubjectBadge = document.getElementById("teacherSubjectBadge");
+const dummyData = {
+  A: {
+    subjects:["探究","社会"],
+    summary:"事実：3枚／原因：2枚／アイデア：5枚\n・事実がやや少なめ\n・アイデアが多いが、原因とつながっていないものもありそう",
+    feedback:[
+      "事実・現状のカードをもう少し増やすよう問いかける。",
+      "アイデアごとに「どの原因に効きそうか？」を聞いてみる。",
+      "次に試したい一歩を1つ選ばせ、期限や役割を決めさせる。"
+    ]
+  },
+  B: {
+    subjects:["家庭科","探究"],
+    summary:"事実：5枚／原因：4枚／アイデア：2枚\n・事実と原因は十分\n・アイデアが少なく、発散が足りないかもしれない",
+    feedback:[
+      "原因カードを見ながら「他にできる工夫は？」とアイデア出しを促す。",
+      "小さな行動レベルのアイデアも歓迎することを伝える。",
+      "似たアイデアをまとめて、実行しやすい形に整理する。"
+    ]
+  },
+  C: {
+    subjects:["図書","探究"],
+    summary:"事実：2枚／原因：1枚／アイデア：4枚\n・全体的にカードが少ない\n・思いつきのアイデアが多く、根拠が弱い可能性",
+    feedback:[
+      "まず事実カードを増やし、利用者の具体的な様子を引き出す。",
+      "アイデアごとに「なぜそれが良さそうと思ったか」を質問する。",
+      "次の時間までに追加調査してくるタスクを提案する。"
+    ]
+  }
+};
+teamItems.forEach(item=>{
+  item.addEventListener("click",()=>{
+    teamItems.forEach(t=>t.classList.remove("active"));
+    item.classList.add("active");
+    const team=item.dataset.team;
+    const data=dummyData[team];
+    summaryText.textContent=data.summary;
+    teacherSubjectBadge.innerHTML="教科タグ：";
+    data.subjects.forEach(sub=>{
+      const span=document.createElement("span");
+      span.className="teacher-subject-badge";
+      span.textContent=sub;
+      teacherSubjectBadge.appendChild(span);
+    });
+    feedbackList.innerHTML="";
+    data.feedback.forEach(fb=>{
+      const li=document.createElement("li");
+      li.textContent=fb;
+      feedbackList.appendChild(li);
+    });
+  });
+});
+</script>
+</body>
+</html>
