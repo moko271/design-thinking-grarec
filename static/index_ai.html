@@ -991,39 +991,108 @@ uploadAudioBtn.onclick = async () => {
   }
 };
 
-// ==== ブラウザ録音 ====
+// ==== ブラウザ録音（VAD 付き自動停止版） ====
 const startRecordBtn = document.getElementById("startRecordBtn");
 const stopRecordBtn  = document.getElementById("stopRecordBtn");
 const recordStatus   = document.getElementById("recordStatus");
+
 let mediaRecorder = null;
 let recordedChunks = [];
+
+// VAD 用
+let audioContext = null;
+let analyser = null;
+let vadDataArray = null;
+let lastVoiceTime = 0;
+let vadRunning = false;
+
+const VAD_CONFIG = {
+  volumeThreshold: 0.01,   // これより大きければ「声あり」
+  silenceDuration: 2000,   // 2秒連続で無音なら発話終了
+};
+
+function stopRecordingInternal() {
+  if (mediaRecorder && mediaRecorder.state === "recording") {
+    mediaRecorder.stop();
+    recordStatus.textContent = "録音停止処理中…";
+  }
+  vadRunning = false;
+}
+
+function startVadLoop() {
+  if (!analyser || !vadDataArray) return;
+  vadRunning = true;
+  lastVoiceTime = Date.now();
+
+  const loop = () => {
+    if (!vadRunning) return;
+    analyser.getByteFrequencyData(vadDataArray);
+    const avg =
+      vadDataArray.reduce((a, b) => a + b, 0) / (vadDataArray.length || 1) / 255;
+
+    if (avg > VAD_CONFIG.volumeThreshold) {
+      // 声が出ている
+      lastVoiceTime = Date.now();
+      recordStatus.textContent = "録音中…（話し合い中）";
+    } else {
+      // 無音が続いているか確認
+      const silentMs = Date.now() - lastVoiceTime;
+      if (silentMs > VAD_CONFIG.silenceDuration) {
+        recordStatus.textContent = "無音が続いたため自動停止します…";
+        stopRecordingInternal();
+        return;
+      }
+    }
+    requestAnimationFrame(loop);
+  };
+
+  loop();
+}
 
 startRecordBtn.onclick = async () => {
   if (mediaRecorder && mediaRecorder.state === "recording") return;
   recordStatus.textContent = "マイクへのアクセスを許可してください…";
   startRecordBtn.disabled = true;
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    // VAD 用 AudioContext 準備
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioContext.createMediaStreamSource(stream);
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    const bufferLength = analyser.frequencyBinCount;
+    vadDataArray = new Uint8Array(bufferLength);
+    source.connect(analyser);
+
     recordedChunks = [];
     mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-    mediaRecorder.ondataavailable = e => {
+
+    mediaRecorder.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) recordedChunks.push(e.data);
     };
+
     mediaRecorder.onstart = () => {
       recordStatus.textContent = "録音中…（話し合いをしてください）";
       stopRecordBtn.disabled = false;
+      startVadLoop();  // VAD ループ開始
     };
+
     mediaRecorder.onstop = async () => {
-      recordStatus.textContent = "録音終了。文字起こし中…";
+      vadRunning = false;
       stopRecordBtn.disabled = true;
+
       const blob = new Blob(recordedChunks, { type: "audio/webm" });
       recordedChunks = [];
+
+      recordStatus.textContent = "録音終了。文字起こし中…";
       try {
         const formData = new FormData();
         formData.append("audio", blob, "recorded.webm");
         const res = await fetch("/api/transcribe", {
           method: "POST",
-          body: formData
+          body: formData,
         });
         const data = await res.json();
         if (!res.ok || !data.ok) {
@@ -1033,36 +1102,44 @@ startRecordBtn.onclick = async () => {
         }
         const text = data.text || "";
         if (text) {
-          if (rawMemoEl.value && !rawMemoEl.value.endsWith("\n")) rawMemoEl.value += "\n";
+          if (rawMemoEl.value && !rawMemoEl.value.endsWith("\n"))
+            rawMemoEl.value += "\n";
           rawMemoEl.value += text;
-          recordStatus.textContent = "文字起こし完了：メモ欄に追記しました。";
+          recordStatus.textContent =
+            "文字起こし完了：メモ欄に追記しました。";
         } else {
-          recordStatus.textContent = "テキストが空でした。話し合いが短すぎたかもしれません。";
+          recordStatus.textContent =
+            "テキストが空でした。話し合いが短すぎたかもしれません。";
         }
       } catch (e) {
         recordStatus.textContent = "通信エラー: " + e;
       } finally {
         if (mediaRecorder && mediaRecorder.stream) {
-          mediaRecorder.stream.getTracks().forEach(t => t.stop());
+          mediaRecorder.stream.getTracks().forEach((t) => t.stop());
         }
         mediaRecorder = null;
+        if (audioContext) {
+          audioContext.close();
+          audioContext = null;
+        }
         startRecordBtn.disabled = false;
       }
     };
+
     mediaRecorder.start();
   } catch (e) {
     console.error(e);
-    recordStatus.textContent = "マイクが利用できません（許可されていないか、端末が非対応です）。";
+    recordStatus.textContent =
+      "マイクが利用できません（許可されていないか、端末が非対応です）。";
     startRecordBtn.disabled = false;
   }
 };
 
+// 手動停止ボタン（ユーザーが任意タイミングで止めたいとき用）
 stopRecordBtn.onclick = () => {
-  if (mediaRecorder && mediaRecorder.state === "recording") {
-    mediaRecorder.stop();
-    recordStatus.textContent = "録音停止処理中…";
-  }
+  stopRecordingInternal();
 };
+
 
 // ==== AI キーワード抽出（キーワード＋元セリフ）====
 const aiKeywordBtn    = document.getElementById("aiKeywordBtn");
