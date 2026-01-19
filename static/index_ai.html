@@ -1007,9 +1007,10 @@ let lastVoiceTime = 0;
 let vadRunning = false;
 
 const VAD_CONFIG = {
-  volumeThreshold: 0.002,  // ← 超敏感に！
-  silenceDuration: 1500,   // 1.5秒で停止
+  volumeThreshold: 0.001,  // ← これを0.001に！
+  silenceDuration: 1500,
 };
+
 
 
 function stopRecordingInternal() {
