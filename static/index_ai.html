@@ -2,14 +2,104 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>話し合い整理グラレコ・AI版（フェーズ別）</title>
+  <title>GraRec - 話し合いを、一枚の絵に。</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
+    body, button, input, select, textarea {
+      font-family: 'Noto Sans JP', sans-serif;
+    }
     body {
       margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: 'Noto Sans JP', sans-serif;
       height: 100vh;
       display: flex;
       flex-direction: column;
+      background: #F5F8FC;
+      overflow: hidden;
+    }
+
+    header {
+      background: #1A3A5C;
+      color: white;
+      padding: 0 20px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.hidden {
+      display: none;
+    }
+    .modal-card {
+      width: 100%;
+      max-width: 520px;
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+    }
+    .modal-card h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      color: #1a2640;
+    }
+    .modal-card label {
+      display: block;
+      margin-top: 16px;
+      font-size: 13px;
+      color: #333;
+    }
+    .modal-card input,
+    .modal-card select {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      box-sizing: border-box;
+      margin-top: 6px;
+    }
+    .modal-card .phase-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .modal-card .phase-row button,
+    .modal-card .phase-row select {
+      flex: 1 1 180px;
+    }
+    .modal-card button[type="button"] {
+      width: 100%;
+      margin-top: 18px;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 10px;
+      background: #4a90d9;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .modal-card .hint-text {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #555;
+      min-height: 20px;
     }
 
     #tabs {
@@ -31,31 +121,71 @@
     #main {
       flex: 1;
       display: flex;
+      overflow: hidden;
+      min-height: 0;
     }
 
     #student-view, #teacher-view {
       display: none;
       width: 100%;
     }
-    #student-view.active, #teacher-view.active {
+    #student-view {
       display: flex;
     }
 
-    #left, #right {
-      box-sizing: border-box;
-      padding: 16px;
-    }
     #left {
-      width: 35%;
-      border-right: 1px solid #ccc;
+      width: 200px;
+      min-width: 200px;
+      border-right: 1px solid #dde3ea;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 0;
+      overflow-y: auto;
+      background: #ffffff;
+      padding: 0;
+      flex-shrink: 0;
     }
+
     #right {
       flex: 1;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .left-section {
+      padding: 12px 14px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .left-section-title {
+      font-size: 12px;
+      font-weight: bold;
+      color: #1A3A5C;
+      margin-bottom: 8px;
+      letter-spacing: 0.3px;
+    }
+    .btn-primary {
+      padding: 10px 16px;
+      background: #2A6DB5;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      width: 100%;
+    }
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      padding: 7px 12px;
+      background: #f0f4fa;
+      color: #2A6DB5;
+      border: 1px solid #c0d0e8;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
     }
 
     h2 {
@@ -150,18 +280,14 @@
       margin-bottom: 4px;
     }
 
-    #keywords-user,
     #keywords-ai {
       border: 1px solid #ccc;
       min-height: 80px;
       padding: 8px;
-      background: #fffef5;
-      overflow-y: auto;
-      margin-bottom: 4px;
-    }
-    #keywords-ai {
       background: #f3f8ff;
       border-style: dashed;
+      overflow-y: auto;
+      margin-bottom: 4px;
     }
 
     .keyword-input-row {
@@ -182,16 +308,30 @@
     .keyword-card {
       background: #fff8c6;
       border: 1px solid #e0c050;
-      padding: 4px 8px;
+      padding: 8px 10px;
       margin-bottom: 4px;
       cursor: grab;
       font-size: 12px;
-      display: inline-block;
+      display: block;
+      text-align: center;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      transition: transform 0.1s;
+    }
+    .keyword-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+    }
+
+    .keyword-card div:first-child {
+      font-size: 14px;
+      font-weight: bold;
+      color: #1a1a1a;
     }
 
     .keyword-card div.quote {
       font-size: 10px;
-      color: #555;
+      color: #888;
       margin-top: 2px;
     }
 
@@ -209,14 +349,47 @@
     #canvas-wrapper {
       display: flex;
       flex-direction: column;
-      height: 100%;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      padding: 0;
+    }
+    #canvas-pan-area {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      cursor: grab;
+      min-height: 0;
+    }
+    #canvas-pan-area.panning { cursor: grabbing; }
+    .png-save-btn {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      z-index: 10;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 10px;
+      background: #1A3A5C;
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      letter-spacing: 0.5px;
+    }
+    .png-save-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
     #canvas-header {
-      margin-bottom: 4px;
+      padding: 4px 10px;
       display: flex;
       gap: 8px;
       align-items: center;
       justify-content: space-between;
+      background: #fff;
+      border-bottom: 1px solid #e8eef6;
+      flex-shrink: 0;
     }
     #canvas-title-block {
       display: flex;
@@ -235,21 +408,28 @@
     }
 
     #canvas {
-      flex: 1;
+      width: 2000px;
+      height: 1400px;
       border: 1px solid #aaa;
-      position: relative;
-      background: #fdfdfd;
-      overflow: hidden;
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: 0 0;
+      background: #f5f5dc;
+      background-image:
+        repeating-linear-gradient(to right, transparent 0px, transparent 19px, rgba(0,0,0,0.1) 20px),
+        repeating-linear-gradient(to bottom, transparent 0px, transparent 19px, rgba(0,0,0,0.1) 20px);
     }
 
     .area {
       position: absolute;
       border: 1px dashed #999;
       box-sizing: border-box;
-      padding: 4px;
+      padding: 24px 4px 4px;
       font-size: 12px;
       color: #555;
-      background: rgba(255,255,255,0.7);
+      background: transparent !important;
+      overflow: visible;
     }
 
     /* さぐる・きづく */
@@ -342,52 +522,153 @@
     }
 
     .area-label {
+      position: absolute;
+      top: -22px;
+      left: 0;
+      white-space: nowrap;
+      background: rgba(255,255,255,0.92);
+      padding: 2px 8px;
+      border-radius: 4px 4px 0 0;
       font-weight: bold;
-      font-size: 12px;
-      margin-bottom: 2px;
+      font-size: 11px;
       display: flex;
       align-items: center;
       gap: 4px;
+      z-index: 2;
+      box-shadow: 0 -1px 3px rgba(0,0,0,0.06);
     }
     .area-label span.icon {
-      font-size: 14px;
+      font-size: 12px;
     }
     .area-hint {
-      font-size: 10px;
+      font-size: 11px;
       color: #555;
     }
 
     .note {
       position: absolute;
+      width: 88px;
+      height: 72px;
+      min-width: 88px;
+      min-height: 72px;
+      max-width: 88px;
+      max-height: 72px;
+      padding: 5px 6px 4px;
+      font-size: 10px;
+      overflow: hidden;
+      box-sizing: border-box;
+      cursor: pointer;
       background: #fff9c4;
       border: 1px solid #f0c000;
-      padding: 4px 6px;
-      font-size: 12px;
-      cursor: move;
-      max-width: 160px;
+      box-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+      transform: rotate(-1deg);
+      border-radius: 4px;
       word-wrap: break-word;
-      box-shadow: 1px 1px 2px rgba(0,0,0,0.15);
+      white-space: normal;
+    }
+
+    .note div:first-child {
+      font-size: 11px;
+      font-weight: bold;
+      color: #1a1a1a;
+    }
+
+    .note div.quote {
+      display: none;
+    }
+
+    .note .quote {
+      display: none !important;
+    }
+
+    .note .keyword-text {
+      font-size: 11px;
+      font-weight: bold;
+      color: #1a1a1a;
+      line-height: 1.3;
+      max-height: 38px;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      margin-bottom: 2px;
+    }
+
+    .note img {
+      width: 28px !important;
+      height: 28px !important;
+      right: -8px !important;
+      top: -8px !important;
+    }
+
+    .keyword-card .keyword-text {
+      font-size: 14px;
+      font-weight: bold;
+      color: #1a1a1a;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .keyword-card .quote {
+      font-size: 10px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .note-saguru {
+      background: #e3f2fd;
+      border-color: #90caf9;
+    }
+    .note-kizuku {
+      background: #fce4ec;
+      border-color: #f8bbd9;
+    }
+    .note-hirameku {
+      background: #fff9c4;
+      border-color: #f0c000;
     }
 
     #step-guide {
       border-top: 1px solid #ddd;
-      padding: 6px 10px;
-      font-size: 12px;
-      background: #fafafa;
+      padding: 12px 20px;
+      font-size: 14px;
+      background: #FAFAF7;
       display: flex;
-      gap: 12px;
+      gap: 16px;
       align-items: center;
+      justify-content: center;
       flex-wrap: wrap;
+      counter-reset: step-counter;
     }
     .step {
-      padding: 4px 6px;
-      border-radius: 4px;
-      background: #e3f2fd;
-      border: 1px solid #90caf9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #4A90D9;
+      color: white;
+      font-weight: 500;
     }
-    .step span.label {
+    .step::before {
+      content: counter(step-counter);
+      counter-increment: step-counter;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: white;
+      color: #4A90D9;
       font-weight: bold;
-      margin-right: 4px;
+      font-size: 12px;
+    }
+    .step:not(:last-child)::after {
+      content: "→";
+      margin-left: 8px;
+      color: #4A90D9;
+      font-size: 16px;
     }
 
     .next-phase-buttons {
@@ -433,132 +714,672 @@
       background: #e3f2fd;
       border-color: #64b5f6;
     }
-    .teacher-subject-badge {
-      display: inline-block;
-      margin-left: 4px;
-      padding: 1px 4px;
-      border-radius: 8px;
-      font-size: 10px;
-      background: #e8f5e9;
-      color: #2e7d32;
-      border: 1px solid #a5d6a7;
+    #mode-toggle {
+      display: flex;
+      justify-content: center;
+      padding: 8px;
+      background: #f0f0f0;
+      border-bottom: 1px solid #ccc;
     }
+    .mode-btn {
+      padding: 6px 12px;
+      border: 1px solid #4A90D9;
+      background: white;
+      color: #4A90D9;
+      cursor: pointer;
+      border-radius: 4px;
+      margin: 0 4px;
+    }
+    .mode-btn.active {
+      background: #4A90D9;
+      color: white;
+    }
+
+.ob-dot {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: #e0e0e0;
+  transition: background 0.3s;
+}
+.ob-dot.active { background: #4a90d9; }
+.ob-dot.done   { background: #4caf50; }
+
+.ob-option-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.ob-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 8px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+.ob-option:hover {
+  border-color: #4a90d9;
+  background: #f0f7ff;
+}
+.ob-option.selected {
+  border-color: #4a90d9;
+  background: #e8f2ff;
+}
+.ob-icon  { font-size: 28px; }
+.ob-label { font-size: 13px; font-weight: bold;
+             color: #1a2530; }
+.ob-sub   { font-size: 11px; color: #888;
+             line-height: 1.4; }
+.ob-next {
+  width: 100%;
+  padding: 13px;
+  background: #4a90d9;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.ob-next:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ===== 議事録レイアウト ===== */
+.layout-minutes #area-agenda {
+  top: 4px; left: 4px; right: 50%; height: 30%;
+  border-color: #1976d2;
+  background: rgba(227, 242, 253, 0.9);
+}
+.layout-minutes #area-decision {
+  top: 4px; left: 50%; right: 4px; height: 30%;
+  border-color: #388e3c;
+  background: rgba(232, 245, 233, 0.9);
+}
+.layout-minutes #area-minutes-action {
+  top: 34%; left: 4px; right: 4px; height: 28%;
+  border-color: #f57c00;
+  background: rgba(255, 243, 224, 0.9);
+}
+.layout-minutes #area-minutes-next {
+  top: 66%; left: 4px; right: 50%; bottom: 4px;
+  border-color: #7b1fa2;
+  background: rgba(243, 229, 245, 0.9);
+}
+.layout-minutes #area-pending {
+  top: 66%; left: 50%; right: 4px; bottom: 4px;
+  border-color: #c62828;
+  background: rgba(255, 235, 238, 0.9);
+}
+
+/* ===== 面談記録レイアウト ===== */
+.layout-interview #area-member {
+  top: 4px; left: 4px; right: 4px; height: 12%;
+  border-color: #5c6bc0;
+  background: rgba(232, 234, 246, 0.9);
+}
+.layout-interview #area-recent {
+  top: 16%; left: 4px; right: 50%; height: 22%;
+  border-color: #00897b;
+  background: rgba(224, 242, 241, 0.9);
+}
+.layout-interview #area-next-goal {
+  top: 16%; left: 50%; right: 4px; height: 22%;
+  border-color: #f9a825;
+  background: rgba(255, 249, 196, 0.9);
+}
+.layout-interview #area-event {
+  top: 40%; left: 4px; right: 4px; height: 18%;
+  border-color: #e91e63;
+  background: rgba(252, 228, 236, 0.9);
+}
+.layout-interview #area-trouble {
+  top: 60%; left: 4px; right: 50%; height: 20%;
+  border-color: #ef5350;
+  background: rgba(255, 235, 238, 0.9);
+}
+.layout-interview #area-connect {
+  top: 60%; left: 50%; right: 4px; height: 20%;
+  border-color: #26a69a;
+  background: rgba(224, 242, 241, 0.9);
+}
+.layout-interview #area-comm-action {
+  top: 82%; left: 4px; right: 4px; bottom: 4px;
+  border-color: #1565c0;
+  background: rgba(227, 242, 253, 0.95);
+  border-width: 2px;
+  border-style: dashed;
+}
+
+/* ===== カスタムレイアウト ===== */
+.layout-custom #area-custom-1 {
+  top: 4px; left: 4px; right: 50%; height: 30%;
+  border-color: #546e7a;
+  background: rgba(240,240,240,0.9);
+}
+.layout-custom #area-custom-2 {
+  top: 4px; left: 50%; right: 4px; height: 30%;
+  border-color: #546e7a;
+  background: rgba(240,240,240,0.9);
+}
+.layout-custom #area-custom-3 {
+  top: 34%; left: 4px; right: 50%; height: 30%;
+  border-color: #546e7a;
+  background: rgba(240,240,240,0.9);
+}
+.layout-custom #area-custom-4 {
+  top: 34%; left: 50%; right: 4px; height: 30%;
+  border-color: #546e7a;
+  background: rgba(240,240,240,0.9);
+}
+.layout-custom #area-custom-5 {
+  top: 68%; left: 4px; right: 50%; bottom: 4px;
+  border-color: #546e7a;
+  background: rgba(240,240,240,0.9);
+}
+.layout-custom #area-custom-6 {
+  top: 68%; left: 50%; right: 4px; bottom: 4px;
+  border-color: #546e7a;
+  background: rgba(240,240,240,0.9);
+}
+
+/* カスタム項目の編集スタイル */
+.custom-label-editable {
+  outline: none;
+  min-width: 60px;
+  cursor: text;
+}
+.custom-label-editable:empty:before {
+  content: attr(data-placeholder);
+  color: #aaa;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ズームコントロール */
+#zoom-controls {
+  position: fixed;
+  right: 16px;
+  bottom: 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 200;
+}
+#zoom-controls button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: white;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  padding: 0;
+  line-height: 1;
+}
+#zoom-controls button:hover { background: #f0f4ff; }
+#zoom-indicator {
+  position: fixed;
+  left: 218px;
+  bottom: 10px;
+  font-size: 11px;
+  color: #888;
+  z-index: 200;
+  background: rgba(255,255,255,0.85);
+  padding: 2px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* 未配置ゾーンガイド（キャンバス下部） */
+#unplaced-zone-guide {
+  position: absolute;
+  left: 16px;
+  border-top: 2px dashed #bbb;
+  padding-top: 6px;
+  font-size: 11px;
+  color: #aaa;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* DA チップ */
+.da-chip {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: bold;
+}
   </style>
 </head>
 <body>
-  <div id="tabs">
-    <div class="tab active" data-target="student-view">生徒用</div>
-    <div class="tab" data-target="teacher-view">先生用（デモ）</div>
+  <header style="
+    background: #1A3A5C;
+    color: white;
+    padding: 0 20px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  ">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span style="font-size:18px; font-weight:700;">
+        GraRec
+      </span>
+      <span style="font-size:12px; opacity:0.7;">
+        話し合いを、一枚の絵に。
+      </span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;
+                font-size:12px;">
+      <span style="opacity:0.8;">自動配置</span>
+      <label style="
+        position:relative; display:inline-block;
+        width:40px; height:22px;">
+        <input type="checkbox" id="autoModeToggle"
+               style="opacity:0; width:0; height:0;">
+        <span id="autoModeSlider" style="
+          position:absolute; cursor:pointer;
+          top:0; left:0; right:0; bottom:0;
+          background:#4A8FD4; border-radius:22px;
+          transition:.3s;">
+          <span style="
+            position:absolute; content:'';
+            height:16px; width:16px;
+            left:3px; bottom:3px;
+            background:white; border-radius:50%;
+            transition:.3s;" id="autoModeKnob"></span>
+        </span>
+      </label>
+      <label style="display:flex; align-items:center; gap:4px;
+        font-size:12px; color:white; margin-left:12px; cursor:pointer;">
+        <input type="checkbox" id="reviewModeToggle">
+        📖 振り返り
+      </label>
+      <button id="resetSessionBtn" style="
+        background:#FF6B6B; color:white; border:none; border-radius:6px;
+        padding:6px 12px; font-size:12px; cursor:pointer; margin-left:10px;">
+        🔄 新しい話し合い
+      </button>
+    </div>
+  </header>
+  <div id="onboardingModal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width:500px;">
+
+      <!-- 進捗バー -->
+      <div id="ob-progress" style="
+        display:flex; gap:6px; margin-bottom:24px;">
+        <div class="ob-dot active" data-i="0"></div>
+        <div class="ob-dot" data-i="1"></div>
+        <div class="ob-dot" data-i="2"></div>
+      </div>
+
+      <!-- 画面1：職業 -->
+      <div class="ob-screen" data-screen="0">
+        <h2 style="margin:0 0 6px;">
+          はじめまして！
+        </h2>
+        <p style="margin:0 0 16px;font-size:14px;
+                  color:#555;">
+          あなたの職業を教えてください。
+        </p>
+        <div id="ob-job-options" class="ob-option-grid">
+          <button class="ob-option" data-value="student">
+            <span class="ob-icon">🎓</span>
+            <span class="ob-label">学生</span>
+          </button>
+          <button class="ob-option" data-value="teacher">
+            <span class="ob-icon">👩‍🏫</span>
+            <span class="ob-label">教員・ファシリテーター</span>
+          </button>
+          <button class="ob-option" data-value="worker">
+            <span class="ob-icon">💼</span>
+            <span class="ob-label">会社員・社会人</span>
+          </button>
+          <button class="ob-option" data-value="other">
+            <span class="ob-icon">✨</span>
+            <span class="ob-label">その他</span>
+          </button>
+        </div>
+        <button class="ob-next" id="ob-next-0"
+                type="button" disabled>次へ →</button>
+      </div>
+
+      <!-- 画面2：用途 -->
+      <div class="ob-screen" data-screen="1"
+           style="display:none;">
+        <h2 style="margin:0 0 6px;">
+          何に使いたいですか？
+        </h2>
+        <p style="margin:0 0 16px;font-size:14px;
+                  color:#555;">
+          メインの用途を選んでください。
+        </p>
+        <div id="ob-use-options" class="ob-option-grid">
+          <button class="ob-option" data-value="exploration">
+            <span class="ob-icon">🔍</span>
+            <span class="ob-label">探究学習・授業</span>
+          </button>
+          <button class="ob-option" data-value="meeting">
+            <span class="ob-icon">📋</span>
+            <span class="ob-label">会議・議事録</span>
+          </button>
+          <button class="ob-option" data-value="interview">
+            <span class="ob-icon">🗣️</span>
+            <span class="ob-label">面談・1on1</span>
+          </button>
+          <button class="ob-option" data-value="other2">
+            <span class="ob-icon">💡</span>
+            <span class="ob-label">その他</span>
+          </button>
+        </div>
+        <button class="ob-next" id="ob-next-1"
+                type="button" disabled>次へ →</button>
+      </div>
+
+      <!-- 画面3：ワークシート選択 -->
+      <div class="ob-screen" data-screen="2"
+           style="display:none;">
+        <h2 style="margin:0 0 6px;">
+          ワークシートを選んでください
+        </h2>
+        <p style="margin:0 0 16px;font-size:14px;
+                  color:#555;">
+          話し合いの内容に合ったシートを選びます。
+        </p>
+        <div id="ob-sheet-options" class="ob-option-grid">
+          <button class="ob-option ob-sheet"
+                  data-value="design_thinking">
+            <span class="ob-icon">🗺️</span>
+            <span class="ob-label">デザイン思考</span>
+            <span class="ob-sub">
+              さぐる・きづく・ひらめく・つくる・ためす
+            </span>
+          </button>
+          <button class="ob-option ob-sheet"
+                  data-value="minutes">
+            <span class="ob-icon">📝</span>
+            <span class="ob-label">議事録</span>
+            <span class="ob-sub">
+              議題・決定事項・アクション
+            </span>
+          </button>
+          <button class="ob-option ob-sheet"
+                  data-value="interview_sheet">
+            <span class="ob-icon">👥</span>
+            <span class="ob-label">面談記録</span>
+            <span class="ob-sub">
+              近況・目標・困りごと・繋がりたい人
+            </span>
+          </button>
+          <button class="ob-option ob-sheet"
+                  data-value="custom">
+            <span class="ob-icon">⚙️</span>
+            <span class="ob-label">カスタム</span>
+            <span class="ob-sub">
+              自分で項目を作る
+            </span>
+          </button>
+        </div>
+        <div id="num-speakers-section" style="margin-top:18px;">
+          <label style="font-size:13px; color:#555; display:block; margin-bottom:6px;">
+            👥 参加人数（話者数）を教えてください
+          </label>
+          <select id="num-speakers-select" style="
+            font-size:14px; padding:6px 10px; border:1px solid #ccc;
+            border-radius:8px; width:100%;">
+            <option value="2">2人</option>
+            <option value="3" selected>3人</option>
+            <option value="4">4人</option>
+            <option value="5">5人</option>
+            <option value="0">自動検出</option>
+          </select>
+        </div>
+        <button class="ob-next" id="ob-next-2"
+                type="button" disabled>はじめる →</button>
+        <div style="text-align:center;margin-top:12px;">
+          <span id="ob-skip"
+            style="font-size:12px;color:#888;cursor:pointer;text-decoration:underline;">
+            スキップして前回の設定で始める
+          </span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <div id="setupModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>はじめにセットアップ</h2>
+      <label for="setupThemeInput">今日の話し合いのテーマは？</label>
+      <input id="setupThemeInput" type="text" placeholder="例：AIで探究の学びをもっと楽しくするには？" />
+      <label>今どのフェーズから始めますか？</label>
+      <div class="phase-row">
+        <button id="suggestPhaseBtn" type="button">AIが提案する</button>
+        <select id="setupPhaseSelect">
+          <option value="">手動で選ぶ</option>
+          <option value="saguru">さぐる</option>
+          <option value="kizuku">きづく</option>
+          <option value="hirameku">ひらめく</option>
+          <option value="tsukuru">つくる</option>
+          <option value="tamesu">ためす</option>
+        </select>
+      </div>
+      <div id="phaseSuggestionResult" class="hint-text"></div>
+      <button id="setupStartBtn" type="button">始める</button>
+    </div>
+  </div>
+
+  <div id="customAgendaModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <h2>カスタムワークシートを作る</h2>
+      <p style="font-size:13px;color:#555;margin:0 0 12px;">
+        話し合いのテーマや目的を入力すると、
+        AIがワークシートを自動で作ります。
+      </p>
+      <label>アジェンダ・テーマ</label>
+      <textarea id="customAgendaInput"
+        placeholder="例：新製品の企画会議。参加者はマーケと開発。予算とリリース時期を決めたい。"
+        style="width:100%;box-sizing:border-box;padding:8px;
+               min-height:100px;font-size:13px;margin-top:6px;
+               border:1px solid #ccc;border-radius:8px;resize:vertical;">
+      </textarea>
+      <div id="customAgendaStatus"
+           style="font-size:12px;color:#555;margin-top:8px;min-height:16px;"></div>
+      <button id="customAgendaBtn" type="button">
+        AIでワークシートを作る ✨
+      </button>
+    </div>
+  </div>
+
+  <!-- カード詳細ポップアップ -->
+  <div id="card-popup" style="display:none; position:fixed; background:#fff;
+    border:1px solid #dce3ed; border-radius:10px; padding:14px 16px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.15); max-width:260px; z-index:9999;
+    font-size:13px; line-height:1.6;">
+    <div id="card-popup-close" style="float:right; cursor:pointer;
+      font-size:15px; color:#aaa; margin-left:8px;">✕</div>
+    <div id="popup-keyword" style="font-weight:bold; margin-bottom:6px;"></div>
+    <div id="popup-quote" style="margin-bottom:6px; color:#333; font-size:12px;"></div>
+    <div id="popup-speaker" style="font-size:12px; color:#2A6DB5;
+      margin-top:6px; display:none;"></div>
+    <div id="popup-importance" style="font-size:11px; color:#888;
+      margin-top:4px;"></div>
   </div>
 
   <div id="main">
     <!-- 生徒ビュー -->
-    <div id="student-view" class="active">
+    <div id="student-view">
       <div id="left">
-        <div>
-          <h2>① 話し合いのテーマ</h2>
-          <input id="topicInput" type="text" placeholder="例：AIが探究の自走を促進させるためには？" />
+
+        <!-- 参加人数バー -->
+        <div id="num-speakers-bar" style="
+          font-size:12px; color:#555; padding:5px 10px 5px 12px;
+          background:#F0F4FA; border-bottom:1px solid #dce3ed;
+          display:flex; align-items:center; gap:6px;">
+          👥 参加人数：<span id="num-speakers-display">3人</span>
+          <span id="num-speakers-change" style="color:#1a73e8;
+            text-decoration:underline; cursor:pointer;">［変更］</span>
+          <select id="num-speakers-inline" style="display:none;
+            font-size:12px; padding:2px 4px; border:1px solid #ccc;
+            border-radius:4px;">
+            <option value="2">2人</option>
+            <option value="3" selected>3人</option>
+            <option value="4">4人</option>
+            <option value="5">5人</option>
+            <option value="0">自動検出</option>
+          </select>
         </div>
 
-        <div>
-          <h3>② フェーズ選択（円マップ）</h3>
-          <div id="phase-circle-wrapper">
-            <div id="phaseCircle">
-              <div id="phase-circle-center">
-                フェーズはぐるぐる<br>行き来してOK
-              </div>
-              <div class="phase-dot" data-phase="saguru"  id="dot-saguru">①さぐる</div>
-              <div class="phase-dot" data-phase="kizuku"  id="dot-kizuku">②きづく</div>
-              <div class="phase-dot" data-phase="hirameku" id="dot-hirameku">③ひらめく</div>
-              <div class="phase-dot" data-phase="tsukuru" id="dot-tsukuru">④つくる</div>
-              <div class="phase-dot" data-phase="tamesu"  id="dot-tamesu">⑤ためす</div>
-            </div>
-            <div id="phase-caption-text">
-              円のボタンをクリックして、今どのフェーズで考えるか決めます。
-            </div>
+        <!-- 録音セクション -->
+        <div class="left-section">
+          <div class="left-section-title">🎙 録音する</div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button id="startRecordBtn" class="btn-primary">
+              録音開始
+            </button>
+            <button id="stopRecordBtn" class="btn-secondary"
+                    disabled>停止して文字起こし</button>
+          </div>
+          <span id="recordStatus"
+                style="font-size:11px; color:#c62828;
+                       margin-top:4px; display:block;"></span>
+
+          <div style="margin-top:8px; font-size:12px;
+                      color:#666;">
+            または音声ファイルを選択：
+          </div>
+          <div style="display:flex; gap:6px;
+                      align-items:center; margin-top:4px;">
+            <input id="audioFileInput" type="file"
+                   accept="audio/*"
+                   style="font-size:11px; flex:1;"/>
+            <button id="uploadAudioBtn"
+                    class="btn-secondary">変換</button>
+          </div>
+          <span id="transcribeStatus"
+                style="font-size:11px; color:#555;
+                       margin-top:4px; display:block;"></span>
+        </div>
+
+        <!-- テキストメモ（折りたたみ） -->
+        <div class="left-section">
+          <div class="left-section-title"
+               style="cursor:pointer;"
+               onclick="toggleMemo()">
+            📝 メモを見る / 編集する ▾
+          </div>
+          <div id="memoArea" style="display:none;">
+            <textarea id="rawMemo"
+                      placeholder="発言メモや文字起こし結果"
+                      style="width:100%; box-sizing:border-box;
+                             padding:8px; resize:vertical;
+                             min-height:80px; font-size:12px;
+                             margin-top:6px;"></textarea>
           </div>
         </div>
 
-        <div>
-          <h3>③ メモ（発言・文字起こしを書き留める）</h3>
-          <textarea id="rawMemo" placeholder="発言メモや文字起こし結果がここに入ります"></textarea>
-
-          <div style="margin-top:4px; font-size:12px;">
-            音声ファイルを選択（m4a / wav など）：
-            <input id="audioFileInput" type="file" accept="audio/*" />
-          </div>
-          <div style="margin-top:4px; font-size:12px;">
-            <button id="uploadAudioBtn">音声を文字起こしする</button>
-            <span id="transcribeStatus" style="margin-left:8px; color:#555;"></span>
-          </div>
-
-          <div style="margin-top:8px; font-size:12px; border-top:1px dashed #ccc; padding-top:4px;">
-            ブラウザで直接録音する：
-            <button id="startRecordBtn">録音開始</button>
-            <button id="stopRecordBtn" disabled>停止して文字起こし</button>
-            <span id="recordStatus" style="margin-left:8px; color:#c62828;"></span>
-          </div>
-
-          <div style="margin-top:8px; font-size:12px;">
-            <button id="aiKeywordBtn">AIでフェーズに合ったカードを出す</button>
-            <span id="aiKeywordStatus" style="margin-left:8px; color:#555;"></span>
-          </div>
+        <!-- AI抽出セクション -->
+        <div class="left-section">
+          <div class="left-section-title">✨ 言葉を選ぶ</div>
+          <button id="aiKeywordBtn" class="btn-primary"
+                  style="width:100%;">
+            AIでキーワードを抽出する
+          </button>
+          <span id="aiKeywordStatus"
+                style="font-size:11px; color:#555;
+                       margin-top:4px; display:block;"></span>
         </div>
 
-        <div>
-          <h3>④ 重要そうなキーワード／フレーズ</h3>
-          <div class="keyword-input-row">
-            <input id="keywordInput" type="text" placeholder="キーワードを1つ入力（例：内発的動機づけ）" />
-            <button id="addKeywordBtn">追加</button>
-          </div>
+        <!-- 自動配置セクション -->
+        <div class="left-section" id="autoLayoutSection"
+             style="display:none;">
+          <div class="left-section-title">🗂 自動配置する</div>
+          <button id="autoLayoutBtn" class="btn-primary"
+                  style="width:100%;">
+            ワークシートに配置する
+          </button>
+        </div>
 
-          <div style="font-size:12px; margin-bottom:4px;">
-            このキーワードに紐づける教科タグ：
-            <select id="subjectSelect">
-              <option value="">（なし）</option>
-              <option value="社会">社会</option>
-              <option value="理科">理科</option>
-              <option value="国語">国語</option>
-              <option value="数学">数学</option>
-              <option value="総合・探究">総合・探究</option>
+        <!-- リアルタイム配置セクション -->
+        <div class="left-section" id="realtimeSection" style="display:none;">
+          <div class="left-section-title">🔴 リアルタイム配置モード</div>
+          <div style="font-size:11px;color:#555;margin-bottom:8px;">
+            録音開始後、3分ごとに自動でキーワードを抽出・配置します。
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="font-size:12px;">更新間隔：</span>
+            <select id="realtimeInterval"
+                    style="font-size:12px;padding:2px 6px;border:1px solid #ccc;border-radius:4px;">
+              <option value="60">1分</option>
+              <option value="180" selected>3分</option>
+              <option value="300">5分</option>
             </select>
-            <span style="margin-left:4px; color:#777;">
-              ※ この選択は「次に追加するキーワード」にだけ反映されます。
-            </span>
           </div>
-
-          <div class="keyword-zone-title">
-            <span class="icon">✍️</span>自分で見つけた／AIからもらったカード
-          </div>
-          <div class="keyword-zone-sub">
-            メモやAIのカードを見ながら、気になった言葉・フレーズを1行ずつ追加する。
-          </div>
-          <div id="keywords-user"></div>
-
-          <div class="keyword-zone-title" style="margin-top:8px;">
-            <span class="icon">✨</span>AIの提案カード（ログ用）
-          </div>
-          <div class="keyword-zone-sub">
-            直近でAIが提案したカードを記録しておくエリア（ドラッグ元としても使えます）。
-          </div>
-          <div id="keywords-ai"></div>
+          <div id="realtimeStatus"
+               style="font-size:11px;color:#2A6DB5;margin-top:4px;min-height:16px;"></div>
         </div>
+
+        <!-- 手動追加（未配置エリアに追加） -->
+        <div class="left-section">
+          <div class="left-section-title">🃏 カードを追加</div>
+          <div style="display:flex; gap:4px;">
+            <input id="keywordInput" type="text"
+                   placeholder="キーワードを入力"
+                   style="flex:1; padding:5px 8px;
+                          font-size:12px; border:1px solid #ccc;
+                          border-radius:6px;"/>
+            <button id="addKeywordBtn"
+                    class="btn-secondary">追加</button>
+          </div>
+        </div>
+
+        <!-- DA タイプ分布チップ -->
+        <div class="left-section" id="da-chips-section" style="display:none;">
+          <div class="left-section-title">📊 話し合いの分布</div>
+          <div id="da-chips" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;"></div>
+        </div>
+
+        <!-- 振り返りボタン -->
+        <div class="left-section" style="margin-top:auto; padding-bottom:14px;">
+          <button id="reviewPageBtn"
+            onclick="window.open('/review', '_blank')"
+            class="btn-primary"
+            style="background:#2A6DB5;">
+            📖 振り返り
+          </button>
+        </div>
+
       </div>
 
       <div id="right">
         <div id="canvas-wrapper">
           <div id="canvas-header">
             <div id="canvas-title-block">
-              <span>⑤ タイトル：</span>
-              <input id="canvasTitle" type="text" placeholder="話し合い／プロジェクトのタイトルを書く" />
+              <span>タイトル：</span>
+              <input id="topicInput" type="text" placeholder="話し合い／プロジェクトのタイトルを書く" />
             </div>
             <div id="worksheet-phase-label">
               ワークシート：さぐる・気づく・たてる
             </div>
           </div>
 
-          <div class="next-phase-buttons" id="nextPhaseButtons"></div>
+          <div class="next-phase-buttons" id="nextPhaseButtons" style="padding:2px 10px;"></div>
 
+          <div id="canvas-pan-area">
           <div id="canvas" class="layout-saguru-kizuku">
             <!-- さぐる・きづく -->
             <div id="area-target" class="area">
@@ -646,14 +1467,100 @@
               <div class="area-label"><span class="icon">➡️</span>次に取り組むこと</div>
               <div class="area-hint">次のサイクルで試したい一歩。</div>
             </div>
-          </div>
-        </div>
 
-        <div id="step-guide">
-          <div class="step"><span class="label">STEP1</span> テーマを書く</div>
-          <div class="step"><span class="label">STEP2</span> 円からフェーズを選ぶ</div>
-          <div class="step"><span class="label">STEP3</span> 音声を文字起こし or メモを書く</div>
-          <div class="step"><span class="label">STEP4</span> AIでカードを出し、ワークシートに貼って整理</div>
+            <!-- ===== 議事録テンプレート ===== -->
+            <div id="area-agenda" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">📋</span>議題・背景</div>
+              <div class="area-hint">今日の会議で話し合うことのカードを貼る。</div>
+            </div>
+            <div id="area-decision" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">✅</span>決定事項</div>
+              <div class="area-hint">会議で決まったことのカードを貼る。</div>
+            </div>
+            <div id="area-minutes-action" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">🏃</span>アクションアイテム</div>
+              <div class="area-hint">誰が・何を・いつまでにやるかのカードを貼る。</div>
+            </div>
+            <div id="area-minutes-next" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">➡️</span>次回までのやること</div>
+              <div class="area-hint">次の会議までにやることを貼る。</div>
+            </div>
+            <div id="area-pending" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">⏸️</span>保留・未解決の課題</div>
+              <div class="area-hint">今回決まらなかったこと・持ち越しのカードを貼る。</div>
+            </div>
+
+            <!-- ===== 面談記録テンプレート ===== -->
+            <div id="area-member" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">👤</span>会員名・日付・担当者</div>
+              <div class="area-hint">誰の面談か・いつかのカードを貼る。</div>
+            </div>
+            <div id="area-recent" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">🗓️</span>近況・先月どうだった</div>
+              <div class="area-hint">最近の出来事や先月の振り返りのカードを貼る。</div>
+            </div>
+            <div id="area-next-goal" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">🎯</span>来月やりたいこと</div>
+              <div class="area-hint">次の1ヶ月でやりたいこと・目標のカードを貼る。</div>
+            </div>
+            <div id="area-event" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">🎪</span>イベント参加・解決したいこと</div>
+              <div class="area-hint">参加できそうなイベント・何を解決したいかのカードを貼る。</div>
+            </div>
+            <div id="area-trouble" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">😟</span>困っていること</div>
+              <div class="area-hint">今困っていること・悩みのカードを貼る。</div>
+            </div>
+            <div id="area-connect" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">🤝</span>繋がりたい人</div>
+              <div class="area-hint">会いたい人・紹介してほしい人のカードを貼る。</div>
+            </div>
+            <div id="area-comm-action" class="area" style="display:none;">
+              <div class="area-label"><span class="icon">💪</span>コミュニケーターとして動けること</div>
+              <div class="area-hint">自分が助けてあげられることを書く欄（手書き推奨）。</div>
+            </div>
+
+            <!-- ===== カスタムテンプレート ===== -->
+            <div id="area-custom-1" class="area" style="display:none;">
+              <div class="area-label custom-label-editable"
+                   contenteditable="true"
+                   data-placeholder="項目名を入力">項目1</div>
+              <div class="area-hint">このエリアに対応するカードを貼ってください。</div>
+            </div>
+            <div id="area-custom-2" class="area" style="display:none;">
+              <div class="area-label custom-label-editable"
+                   contenteditable="true"
+                   data-placeholder="項目名を入力">項目2</div>
+              <div class="area-hint">このエリアに対応するカードを貼ってください。</div>
+            </div>
+            <div id="area-custom-3" class="area" style="display:none;">
+              <div class="area-label custom-label-editable"
+                   contenteditable="true"
+                   data-placeholder="項目名を入力">項目3</div>
+              <div class="area-hint">このエリアに対応するカードを貼ってください。</div>
+            </div>
+            <div id="area-custom-4" class="area" style="display:none;">
+              <div class="area-label custom-label-editable"
+                   contenteditable="true"
+                   data-placeholder="項目名を入力">項目4</div>
+              <div class="area-hint">このエリアに対応するカードを貼ってください。</div>
+            </div>
+            <div id="area-custom-5" class="area" style="display:none;">
+              <div class="area-label custom-label-editable"
+                   contenteditable="true"
+                   data-placeholder="項目名を入力">項目5</div>
+              <div class="area-hint">このエリアに対応するカードを貼ってください。</div>
+            </div>
+            <div id="area-custom-6" class="area" style="display:none;">
+              <div class="area-label custom-label-editable"
+                   contenteditable="true"
+                   data-placeholder="項目名を入力">項目6</div>
+              <div class="area-hint">このエリアに対応するカードを貼ってください。</div>
+            </div>
+
+          </div>
+          </div><!-- #canvas-pan-area -->
+          <button id="savePngBtn" class="png-save-btn" type="button">PNG保存</button>
         </div>
       </div>
     </div>
@@ -700,7 +1607,111 @@
     </div>
   </div>
 
+  <!-- ズームコントロール（固定） -->
+  <div id="zoom-controls">
+    <button id="zoomInBtn" title="拡大">＋</button>
+    <button id="zoomFitBtn" title="全体表示" style="font-size:12px;">FIT</button>
+    <button id="zoomOutBtn" title="縮小">－</button>
+  </div>
+  <div id="zoom-indicator">100%</div>
+
 <script>
+// メモ折りたたみ機能
+function toggleMemo() {
+  const area = document.getElementById('memoArea');
+  area.style.display =
+    area.style.display === 'none' ? 'block' : 'none';
+}
+
+// 自動配置トグルのJS
+document.getElementById('autoModeToggle')
+  .addEventListener('change', function() {
+    const realtimeSection = document.getElementById('realtimeSection');
+    const autoLayoutSection = document.getElementById('autoLayoutSection');
+    if (this.checked) {
+      realtimeSection.style.display = 'block';
+      autoLayoutSection.style.display = 'none';
+    } else {
+      realtimeSection.style.display = 'none';
+      autoLayoutSection.style.display = 'block';
+    }
+  });
+
+// キーワード→絵文字マッピング
+const keywordEmojiMap = {
+  "内発的動機づけ": "🔥",
+  "動機づけ": "🔥",
+  "探究": "🔍",
+  "AI": "🤖",
+  "人工知能": "🤖",
+  "学習": "📚",
+  "協力": "🤝",
+  "チームワーク": "🤝",
+  "創造性": "🎨",
+  "問題解決": "🧩",
+  "観察": "👀",
+  "インタビュー": "🗣️",
+  "アイデア": "💡",
+  "ひらめき": "💡",
+  "目標": "🎯",
+  "困りごと": "❓",
+  "願いごと": "🙏",
+  "事実": "📌",
+  "解釈": "🧠",
+  "機能": "⚙️",
+  "特徴": "⭐",
+  "見た目": "👀",
+  "大きさ": "📏",
+  "テスト": "🧪",
+  "改善": "🔧",
+  "次の一歩": "➡️",
+  "default": "💡"
+};
+
+function getEmojiForKeyword(keyword) {
+  for (const [key, emoji] of Object.entries(keywordEmojiMap)) {
+    if (key !== "default" && keyword.includes(key)) {
+      return emoji;
+    }
+  }
+  return keywordEmojiMap["default"];
+}
+
+function getIllustrationForKeyword(keyword) {
+  const lk = keyword;
+
+  // 困る・悩む・問題系
+  if (lk.match(/困|悩|問題|難し|つらい|しんど|間に合わない|遅刻|眠|寝られない|焦|できない|わからない|不安|心配/))
+    return "illust_trouble.png";
+
+  // ひらめく・アイデア・解決系
+  if (lk.match(/アイデア|ひらめ|解決|工夫|提案|方法|仕組み|改善|対策|やり方|発明|考案/))
+    return "illust_idea.png";
+
+  // 話す・発言・意見系
+  if (lk.match(/発言|意見|伝える|話す|言う|主張|コミュニケーション|説明|報告|プレゼン|発表/))
+    return "illust_talk.png";
+
+  // 調べる・観察・インタビュー系
+  if (lk.match(/調べ|観察|インタビュー|ヒアリング|リサーチ|データ|分析|確認|調査|聞き取り/))
+    return "illust_research.png";
+
+  // 喜ぶ・楽しい・ポジティブ系
+  if (lk.match(/楽し|嬉し|よかった|成功|できた|達成|いいね|好き|最高|ありがとう|喜/))
+    return "illust_happy.png";
+
+  // 驚く・発見・気づき系
+  if (lk.match(/驚|発見|気づ|知らなかった|なるほど|そうか|えっ|初めて|意外|びっくり/))
+    return "illust_surprise.png";
+
+  // 考える・疑問・問い系
+  if (lk.match(/なぜ|どうして|疑問|もしかして|考え|原因|理由|思う|かも|だろう|推測|仮説/))
+    return "illust_think.png";
+
+  // 上記に当てはまらない場合はイラストなし
+  return null;
+}
+
 // タブ切り替え
 const tabs = document.querySelectorAll('.tab');
 const studentView = document.getElementById('student-view');
@@ -730,9 +1741,13 @@ const phaseDots = {
 };
 let currentPhase = "saguru";
 const visitedPhases = new Set(["saguru"]);
+const SESSION_KEY = 'graRec_session';
+let _savingSession = false;
+let currentTemplate = 'saguru';
 
 (function layoutPhaseDots() {
   const circle = document.getElementById("phaseCircle");
+  if (!circle) return;
   const w = circle.clientWidth || 180;
   const h = circle.clientHeight || 180;
   const cx = w / 2;
@@ -788,7 +1803,118 @@ if (coreProblemInput) {
 
 // キャンバスレイアウト
 const canvasEl = document.getElementById("canvas");
-const layoutClasses = ["layout-saguru-kizuku","layout-hirameku","layout-tsukuru","layout-tamesu"];
+const canvasPanArea = document.getElementById('canvas-pan-area');
+const layoutClasses = ["layout-saguru-kizuku","layout-hirameku","layout-tsukuru","layout-tamesu","layout-minutes","layout-interview","layout-custom"];
+
+// ===== 無限キャンバス（パン・ズーム） =====
+let panX = 0, panY = 0, zoom = 1.0;
+const MIN_ZOOM = 0.3, MAX_ZOOM = 2.5;
+
+// ===== 未配置ゾーン設定 =====
+const CARD_W = 116, CARD_H = 82, CARD_GAP = 12, CARDS_PER_ROW = 5;
+const UNPLACED_ZONE_Y = 1100;
+const UNPLACED_START_X = 20;
+let notePositions = [];
+
+function applyTransform() {
+  canvasEl.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  const ind = document.getElementById('zoom-indicator');
+  if (ind) ind.textContent = Math.round(zoom * 100) + '%';
+}
+
+function fitCanvas() {
+  if (!canvasPanArea) return;
+  const pRect = canvasPanArea.getBoundingClientRect();
+  const fitZoom = Math.min(
+    pRect.width / canvasEl.offsetWidth,
+    pRect.height / canvasEl.offsetHeight
+  ) * 0.94;
+  zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitZoom));
+  panX = (pRect.width - canvasEl.offsetWidth * zoom) / 2;
+  panY = (pRect.height - canvasEl.offsetHeight * zoom) / 2;
+  applyTransform();
+}
+
+// パン操作
+let isPanning = false, panStartX = 0, panStartY = 0, panStartOffX = 0, panStartOffY = 0;
+if (canvasPanArea) {
+  canvasPanArea.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.note') || e.target.closest('button') ||
+        e.target.closest('input') || e.target.closest('select')) return;
+    isPanning = true;
+    panStartX = e.clientX;
+    panStartY = e.clientY;
+    panStartOffX = panX;
+    panStartOffY = panY;
+    canvasPanArea.classList.add('panning');
+    e.preventDefault();
+  });
+
+  // ホイールズーム
+  canvasPanArea.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = canvasPanArea.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const factor = e.deltaY > 0 ? 0.9 : 1.1;
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * factor));
+    panX = mx - (mx - panX) * (newZoom / zoom);
+    panY = my - (my - panY) * (newZoom / zoom);
+    zoom = newZoom;
+    applyTransform();
+  }, { passive: false });
+
+  // タッチピンチ（damping 0.4・慣性スクロール防止）
+  let touchDist0 = null, touchPanX0 = 0, touchPanY0 = 0;
+  canvasPanArea.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      touchDist0 = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchPanX0 = panX; touchPanY0 = panY;
+    }
+  }, { passive: false });
+  canvasPanArea.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && touchDist0) {
+      e.preventDefault();
+      const d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const ratio = d / touchDist0;
+      const dampedRatio = 1 + (ratio - 1) * 0.4;
+      const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * dampedRatio));
+      touchDist0 = d;
+      zoom = newZoom;
+      applyTransform();
+    }
+  }, { passive: false });
+  canvasPanArea.addEventListener('touchend', () => { touchDist0 = null; });
+}
+
+document.addEventListener('mousemove', (e) => {
+  if (!isPanning) return;
+  panX = panStartOffX + (e.clientX - panStartX);
+  panY = panStartOffY + (e.clientY - panStartY);
+  applyTransform();
+});
+document.addEventListener('mouseup', () => {
+  if (isPanning) {
+    isPanning = false;
+    canvasPanArea?.classList.remove('panning');
+  }
+});
+
+// ズームボタン
+document.getElementById('zoomInBtn')?.addEventListener('click', () => {
+  zoom = Math.min(MAX_ZOOM, zoom * 1.2); applyTransform();
+});
+document.getElementById('zoomOutBtn')?.addEventListener('click', () => {
+  zoom = Math.max(MIN_ZOOM, zoom / 1.2); applyTransform();
+});
+document.getElementById('zoomFitBtn')?.addEventListener('click', fitCanvas);
 const areaTarget      = document.getElementById("area-target");
 const areaFact        = document.getElementById("area-fact");
 const areaWish        = document.getElementById("area-wish");
@@ -816,7 +1942,26 @@ function setWorksheetLayout(phase) {
     areaTarget,areaFact,areaWish,areaInterpret,
     hiramekuCore,...ideaSlots,
     areaIdeaName,areaCoreProblem,areaLook,areaSize,areaFunction,areaFeature,
-    areaGood,areaBetter,areaNext
+    areaGood,areaBetter,areaNext,
+    // 以下を追加
+    document.getElementById("area-agenda"),
+    document.getElementById("area-decision"),
+    document.getElementById("area-minutes-action"),
+    document.getElementById("area-minutes-next"),
+    document.getElementById("area-pending"),
+    document.getElementById("area-member"),
+    document.getElementById("area-recent"),
+    document.getElementById("area-next-goal"),
+    document.getElementById("area-event"),
+    document.getElementById("area-trouble"),
+    document.getElementById("area-connect"),
+    document.getElementById("area-comm-action"),
+    document.getElementById("area-custom-1"),
+    document.getElementById("area-custom-2"),
+    document.getElementById("area-custom-3"),
+    document.getElementById("area-custom-4"),
+    document.getElementById("area-custom-5"),
+    document.getElementById("area-custom-6"),
   ].forEach(el => { if(el) el.style.display="none"; });
 
   if (phase==="saguru" || phase==="kizuku") {
@@ -854,9 +1999,45 @@ function setWorksheetLayout(phase) {
     if (areaNext) areaNext.style.display="block";
     worksheetPhaseLabel.textContent = "ワークシート：⑤ためす（テストと振り返り）";
   }
+  else if (phase === "minutes") {
+    canvasEl.classList.add("layout-minutes");
+    document.getElementById("area-agenda").style.display = "block";
+    document.getElementById("area-decision").style.display = "block";
+    document.getElementById("area-minutes-action").style.display = "block";
+    document.getElementById("area-minutes-next").style.display = "block";
+    document.getElementById("area-pending").style.display = "block";
+    worksheetPhaseLabel.textContent = "ワークシート：議事録";
+  }
+  else if (phase === "interview") {
+    canvasEl.classList.add("layout-interview");
+    document.getElementById("area-member").style.display = "block";
+    document.getElementById("area-recent").style.display = "block";
+    document.getElementById("area-next-goal").style.display = "block";
+    document.getElementById("area-event").style.display = "block";
+    document.getElementById("area-trouble").style.display = "block";
+    document.getElementById("area-connect").style.display = "block";
+    document.getElementById("area-comm-action").style.display = "block";
+    worksheetPhaseLabel.textContent = "ワークシート：面談記録";
+  }
+  else if (phase === "custom") {
+    canvasEl.classList.add("layout-custom");
+    for (let i = 1; i <= 6; i++) {
+      document.getElementById(
+        "area-custom-" + i
+      ).style.display = "block";
+    }
+    worksheetPhaseLabel.textContent = "ワークシート：カスタム";
+  }
 
   if (coreProblemInput) coreProblemInput.value = coreProblemText;
   updateNotesVisibility();
+
+  const dtPhases = ['saguru','kizuku','hirameku','tsukuru','tamesu'];
+  const autoLayoutSec = document.getElementById('autoLayoutSection');
+  const autoModeParent = document.getElementById('autoModeToggle')?.closest('label')?.parentElement;
+  const showLayout = !dtPhases.includes(phase); // custom / minutes / interview も表示
+  if (autoLayoutSec) autoLayoutSec.style.display = showLayout ? 'block' : 'none';
+  if (autoModeParent) autoModeParent.style.display = showLayout ? 'flex' : 'none';
 }
 
 function updatePhaseDotsHighlight() {
@@ -888,65 +2069,77 @@ function updateNextPhaseButtons() {
   }
 }
 
+function updatePhaseDotsHighlight() {
+  Object.entries(phaseDots).forEach(([ph, dot]) => {
+    if (!dot) return;
+    dot.classList.remove("current","visited");
+    if (ph === currentPhase) dot.classList.add("current");
+    else if (visitedPhases.has(ph)) dot.classList.add("visited");
+  });
+}
+
 function changePhase(newPhase) {
   currentPhase = newPhase;
   visitedPhases.add(newPhase);
   setWorksheetLayout(newPhase);
   updatePhaseDotsHighlight();
   updateNextPhaseButtons();
+  saveSession();
 }
 
-// フェーズごとに付箋を非表示／表示
+// フェーズごとに付箋を非表示／表示（未配置は常に表示）
 function updateNotesVisibility() {
   document.querySelectorAll(".note").forEach(note => {
+    if (note.dataset.area === "unplaced") {
+      note.style.display = "block";
+      return;
+    }
     const notePhase = note.dataset.phase || "";
     note.style.display = (notePhase === currentPhase) ? "block" : "none";
   });
 }
 
-// 円ボタン
-Object.values(phaseDots).forEach(dot=>{
-  dot.addEventListener("click",()=>{
-    const ph = dot.dataset.phase;
-    if (ph) changePhase(ph);
-  });
-});
-
 // 初期化
 changePhase("saguru");
+// 初期ズームをフィットに設定（DOMレンダリング後）
+requestAnimationFrame(() => requestAnimationFrame(fitCanvas));
 
 // ==== キーワード入力 ====
-const keywordInput       = document.getElementById("keywordInput");
-const addKeywordBtn      = document.getElementById("addKeywordBtn");
-const keywordsUserEl     = document.getElementById("keywords-user");
-const keywordsAiEl       = document.getElementById("keywords-ai");
-const subjectSelect      = document.getElementById("subjectSelect");
+const keywordInput  = document.getElementById("keywordInput");
+const addKeywordBtn = document.getElementById("addKeywordBtn");
+
+document.getElementById('topicInput')?.addEventListener('input', saveSession);
+document.getElementById('rawMemo')?.addEventListener('input', saveSession);
 
 addKeywordBtn.onclick = () => {
   const text = keywordInput.value.trim();
   if (!text) return;
-  const subject = subjectSelect.value;
-
-  const card = document.createElement("div");
-  card.className = "keyword-card";
-  card.draggable = true;
-  card.dataset.keyword = text;
-  card.dataset.subject = subject;
-
-  const spanMain = document.createElement("div");
-  spanMain.textContent = text;
-  card.appendChild(spanMain);
-
-  if (subject) {
-    const spanBadge = document.createElement("span");
-    spanBadge.className = "subject-badge";
-    spanBadge.textContent = subject;
-    card.appendChild(spanBadge);
-  }
-
-  keywordsUserEl.appendChild(card);
+  addKeywordCard(text, getEmojiForKeyword(text), '', '', '', '', '', '', undefined, 'medium');
   keywordInput.value = "";
 };
+
+// ==== 未配置ゾーン ヘルパー ====
+function getNextUnplacedPosition() {
+  const existing = document.querySelectorAll('#canvas .note[data-area="unplaced"]');
+  const idx = existing.length;
+  const col = idx % CARDS_PER_ROW;
+  const row = Math.floor(idx / CARDS_PER_ROW);
+  return {
+    x: UNPLACED_START_X + col * (CARD_W + CARD_GAP),
+    y: UNPLACED_ZONE_Y + row * (CARD_H + CARD_GAP)
+  };
+}
+
+function applyUnplacedNoteStyle(note) {
+  note.style.width      = CARD_W + 'px';
+  note.style.height     = CARD_H + 'px';
+  note.style.minWidth   = CARD_W + 'px';
+  note.style.minHeight  = CARD_H + 'px';
+  note.style.maxWidth   = CARD_W + 'px';
+  note.style.maxHeight  = CARD_H + 'px';
+  note.style.overflow   = 'hidden';
+  note.style.display    = 'block';
+}
 
 // ==== 音声アップロード ====
 const rawMemoEl          = document.getElementById("rawMemo");
@@ -954,41 +2147,171 @@ const audioFileInput     = document.getElementById("audioFileInput");
 const uploadAudioBtn     = document.getElementById("uploadAudioBtn");
 const transcribeStatus   = document.getElementById("transcribeStatus");
 
+// ==== チャンクごとにキーワード抽出＆自動配置 ====
+async function extractAndPlaceKeywords(text, _segments) {
+  if (!text || text.trim().length < 10) return;
+  try {
+    const res = await fetch("/api/extract_keywords", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        memo: text,
+        phase: currentPhase || "saguru",
+        template: currentTemplate || "",
+        areas: getCustomAreas()
+      })
+    });
+    const data = await res.json();
+    if (!data.ok || !data.keywords?.length) return;
+    console.log("抽出されたキーワード:", data.keywords);
+    data.keywords.forEach(item => {
+      const kw = item.keyword || "";
+      if (!kw) return;
+      addKeywordCard(
+        kw,
+        getEmojiForKeyword(kw),
+        item.quote || "",
+        item.type || "",
+        item.thought || "",
+        item.who || "",
+        item.what || "",
+        item.when || "",
+        undefined,
+        item.importance || ""
+      );
+    });
+    const autoToggle = document.getElementById('autoModeToggle');
+    if (autoToggle && autoToggle.checked) {
+      await runAutoLayout(false);
+    } else {
+      const template = window.currentTemplate || "";
+      if (template !== "saguru" &&
+          template !== "kizuku" &&
+          template !== "hirameku" &&
+          template !== "tsukuru" &&
+          template !== "tamesu") {
+        await runAutoLayout(false);
+      }
+    }
+  } catch (e) {
+    console.error("extractAndPlaceKeywords error:", e);
+  }
+}
+
+// ==== 音声ファイルをチャンク分割して処理 ====
+async function processAudioInChunks(file) {
+  const CHUNK_SIZE = 300; // 5分
+  const statusEl = transcribeStatus;
+
+  statusEl.textContent = "🎙 音声を読み込んでいます…";
+  uploadAudioBtn.disabled = true;
+
+  try {
+    // 1. 音声の長さを取得
+    const durationForm = new FormData();
+    durationForm.append("audio", file);
+    const durationRes = await fetch("/api/get_audio_duration", {
+      method: "POST",
+      body: durationForm
+    });
+    const durationData = await durationRes.json();
+    if (!durationData.ok) {
+      statusEl.textContent = "⚠️ 音声の読み込みに失敗しました";
+      return;
+    }
+
+    const totalDuration = durationData.duration;
+    const totalChunks = Math.ceil(totalDuration / CHUNK_SIZE);
+    let allText = "";
+    let allSegments = [];
+    let speakerTotals = {};
+
+    // 2. チャンクごとに処理
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min((i + 1) * CHUNK_SIZE, totalDuration);
+      const mins    = Math.floor(start / 60);
+      const endMins = Math.floor(end / 60);
+
+      statusEl.textContent =
+        `🤖 ${i + 1}/${totalChunks} 処理中… ` +
+        `(${mins}分〜${endMins}分)  ` +
+        `残り約${Math.round((totalChunks - i - 1) * 2)}分`;
+
+      const formData = new FormData();
+      formData.append("audio", file);
+      formData.append("chunk_start", start);
+      formData.append("chunk_end", end);
+      formData.append("num_speakers", window.numSpeakers ?? 3);
+
+      try {
+        const res = await fetch("/api/transcribe_chunk", {
+          method: "POST",
+          body: formData
+        });
+        const data = await res.json();
+
+        if (data.ok) {
+          console.log(`チャンク${i+1} テキスト:`, data.text);
+          console.log(`チャンク${i+1} セグメント数:`, (data.segments || []).length);
+
+          allText += (allText ? "　" : "") + data.text;
+          allSegments = allSegments.concat(data.segments || []);
+
+          // 発言量を累積
+          (data.speaker_summary || []).forEach(s => {
+            if (!speakerTotals[s.speaker]) {
+              speakerTotals[s.speaker] = { duration: 0, count: 0 };
+            }
+            speakerTotals[s.speaker].duration += s.duration;
+            speakerTotals[s.speaker].count    += s.count;
+          });
+
+          // メモ欄にリアルタイム追記
+          rawMemoEl.value = allText;
+          saveSession();
+
+          // チャンクごとにキーワード抽出＆自動配置
+          if (data.text.trim().length > 10) {
+            console.log(`チャンク${i+1} キーワード抽出開始`);
+            await extractAndPlaceKeywords(data.text, data.segments);
+          }
+        }
+      } catch (e) {
+        console.error(`chunk ${i + 1} error:`, e);
+      }
+    }
+
+    // 3. 全チャンク完了後にサマリーを表示
+    const totalTime = Object.values(speakerTotals)
+      .reduce((s, v) => s + v.duration, 0);
+    const summaryArr = Object.entries(speakerTotals).map(([sp, v]) => ({
+      speaker: sp,
+      duration: Math.round(v.duration * 10) / 10,
+      percentage: Math.round(v.duration / (totalTime || 1) * 100),
+      count: v.count,
+      label: sp
+    }));
+    window.speakerSummary  = summaryArr.length ? summaryArr : null;
+    window.speakerSegments = allSegments;
+    if (window.speakerSummary) renderSpeakerSummary();
+
+    statusEl.textContent = `✅ 変換完了！（${totalChunks}チャンク処理済み）`;
+  } catch (e) {
+    statusEl.textContent = "⚠️ 音声の変換に失敗しました。";
+    console.error("processAudioInChunks error:", e);
+  } finally {
+    uploadAudioBtn.disabled = false;
+  }
+}
+
 uploadAudioBtn.onclick = async () => {
   const file = audioFileInput.files[0];
   if (!file) {
     transcribeStatus.textContent = "音声ファイルを選択してください。";
     return;
   }
-  transcribeStatus.textContent = "音声を送信中…";
-  uploadAudioBtn.disabled = true;
-  try {
-    const formData = new FormData();
-    formData.append("audio", file);
-    const res = await fetch("/api/transcribe", {
-      method: "POST",
-      body: formData
-    });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      const msg = data.error || `サーバーエラー (${res.status})`;
-      transcribeStatus.textContent = "文字起こしエラー: " + msg;
-      uploadAudioBtn.disabled = false;
-      return;
-    }
-    const text = data.text || "";
-    if (text) {
-      if (rawMemoEl.value && !rawMemoEl.value.endsWith("\n")) rawMemoEl.value += "\n";
-      rawMemoEl.value += text;
-      transcribeStatus.textContent = "文字起こし完了：メモ欄に追記しました。";
-    } else {
-      transcribeStatus.textContent = "テキストが空でした。音声が短すぎるかもしれません。";
-    }
-  } catch (e) {
-    transcribeStatus.textContent = "通信エラー: " + e;
-  } finally {
-    uploadAudioBtn.disabled = false;
-  }
+  await processAudioInChunks(file);
 };
 
 // ==== ブラウザ録音（VAD 付き自動停止版） ====
@@ -999,6 +2322,11 @@ const recordStatus   = document.getElementById("recordStatus");
 let mediaRecorder = null;
 let recordedChunks = [];
 
+window.speakerSummary  = null;
+window.speakerSegments = [];
+window.speakerLabels   = {};
+window.numSpeakers     = 3;
+
 // VAD 用
 let audioContext = null;
 let analyser = null;
@@ -1006,19 +2334,29 @@ let vadDataArray = null;
 let lastVoiceTime = 0;
 let vadRunning = false;
 
+// リアルタイム自動配置
+let timerInterval = null;
+
+let realtimeTimer = null;
+let realtimeBuffer = '';
+let realtimeRunning = false;
+let processedLength = 0;
+
 const VAD_CONFIG = {
   volumeThreshold: 0.001,  // ← これを0.001に！
-  silenceDuration: 1500,
+  silenceDuration: 3000,
 };
 
 
 
 function stopRecordingInternal() {
+  clearInterval(timerInterval);
   if (mediaRecorder && mediaRecorder.state === "recording") {
     mediaRecorder.stop();
     recordStatus.textContent = "録音停止処理中…";
   }
   vadRunning = false;
+  if (realtimeRunning) stopRealtimeMode();
 }
 
 function startVadLoop() {
@@ -1076,12 +2414,21 @@ startRecordBtn.onclick = async () => {
     };
 
     mediaRecorder.onstart = () => {
-      recordStatus.textContent = "録音中…（話し合いをしてください）";
+      recordStatus.textContent = "🔴 録音中… 00:00";
       stopRecordBtn.disabled = false;
       startVadLoop();  // VAD ループ開始
+      if (document.getElementById('autoModeToggle').checked) startRealtimeMode();
+      let recordSeconds = 0;
+      timerInterval = setInterval(() => {
+        recordSeconds++;
+        const min = Math.floor(recordSeconds / 60).toString().padStart(2, '0');
+        const sec = (recordSeconds % 60).toString().padStart(2, '0');
+        recordStatus.textContent = `🔴 録音中… ${min}:${sec}`;
+      }, 1000);
     };
 
     mediaRecorder.onstop = async () => {
+      clearInterval(timerInterval);
       vadRunning = false;
       stopRecordBtn.disabled = true;
 
@@ -1092,7 +2439,7 @@ startRecordBtn.onclick = async () => {
       try {
         const formData = new FormData();
         formData.append("audio", blob, "recorded.webm");
-        const res = await fetch("/api/transcribe", {
+        const res = await fetch("/api/transcribe_with_speakers", {
           method: "POST",
           body: formData,
         });
@@ -1113,6 +2460,9 @@ startRecordBtn.onclick = async () => {
           recordStatus.textContent =
             "テキストが空でした。話し合いが短すぎたかもしれません。";
         }
+        window.speakerSummary  = data.speaker_summary || null;
+        window.speakerSegments = data.segments || [];
+        if (window.speakerSummary) renderSpeakerSummary();
       } catch (e) {
         recordStatus.textContent = "通信エラー: " + e;
       } finally {
@@ -1154,102 +2504,488 @@ aiKeywordBtn.onclick = async () => {
     return;
   }
   const phase = currentPhase || "saguru";
-  aiKeywordStatus.textContent = "AIに送信中…";
+  aiKeywordStatus.textContent = "🤖 AIがキーワードを抽出中です…";
   aiKeywordBtn.disabled = true;
   try {
     const res = await fetch("/api/extract_keywords", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ memo: memoText, phase: phase })
+      body: JSON.stringify({ memo: memoText, phase: phase, template: currentTemplate || "", areas: getCustomAreas() })
     });
     const data = await res.json();
     if (!res.ok || !data.ok) {
-      const msg = data.error || `サーバーエラー (${res.status})`;
-      aiKeywordStatus.textContent = "エラー: " + msg;
+      aiKeywordStatus.textContent = "⚠️ キーワードの抽出に失敗しました。もう一度試してください。";
       aiKeywordBtn.disabled = false;
       return;
     }
-    aiKeywordStatus.textContent = "カードを左の『自分で見つけた／AIからもらったカード』に追加しました。";
-
-    keywordsAiEl.innerHTML = "";
+    aiKeywordStatus.textContent = "カードをキャンバス下部に追加しました。";
 
     (data.keywords || []).forEach(item => {
-      const kw    = typeof item === "string" ? item : (item.keyword || "");
-      const quote = (typeof item === "object" && item.quote) ? item.quote : "";
-
-      // ログ用
-      const logCard = document.createElement("div");
-      logCard.className = "keyword-card";
-      logCard.draggable = true;
-      logCard.dataset.keyword = kw;
-      logCard.dataset.subject = "";
-      const logMain = document.createElement("div");
-      logMain.textContent = kw;
-      logCard.appendChild(logMain);
-      if (quote) {
-        const logQuote = document.createElement("div");
-        logQuote.className = "quote";
-        logQuote.textContent = "「" + quote + "」";
-        logCard.appendChild(logQuote);
-      }
-      keywordsAiEl.appendChild(logCard);
-
-      // 実際に使うカード
-      const card = document.createElement("div");
-      card.className = "keyword-card";
-      card.draggable = true;
-      card.dataset.keyword = kw;
-      card.dataset.subject = "";
-      const spanMain = document.createElement("div");
-      spanMain.textContent = kw;
-      card.appendChild(spanMain);
-      if (quote) {
-        const spanQuote = document.createElement("div");
-        spanQuote.className = "quote";
-        spanQuote.textContent = "「" + quote + "」";
-        card.appendChild(spanQuote);
-      }
-      keywordsUserEl.appendChild(card);
+      const kw      = typeof item === "string" ? item : (item.keyword || "");
+      const who     = (typeof item === "object" && item.who)     ? item.who     : "";
+      const what    = (typeof item === "object" && item.what)    ? item.what    : "";
+      const when    = (typeof item === "object" && item.when)    ? item.when    : "";
+      const quote   = (typeof item === "object" && item.quote)   ? item.quote   : "";
+      const type    = (typeof item === "object" && item.type)    ? item.type    : "";
+      const thought = (typeof item === "object" && item.thought) ? item.thought : "";
+      const imp     = (typeof item === "object" && item.importance) ? item.importance : "";
+      if (!kw) return;
+      addKeywordCard(kw, getEmojiForKeyword(kw), quote, type, thought, who, what, when, undefined, imp);
     });
   } catch (e) {
-    aiKeywordStatus.textContent = "通信エラー: " + e;
+    aiKeywordStatus.textContent = "⚠️ キーワードの抽出に失敗しました。もう一度試してください。";
   } finally {
     aiKeywordBtn.disabled = false;
   }
 };
 
-// ==== ドラッグ＆ドロップ ====
-function setupDragSource(container) {
-  container.addEventListener("dragstart", (e) => {
-    if (e.target.classList.contains("keyword-card")) {
-      e.dataTransfer.setData("text/plain", e.target.dataset.keyword);
-      e.dataTransfer.setData("subject", e.target.dataset.subject || "");
+const setupModal = document.getElementById("setupModal");
+const setupThemeInput = document.getElementById("setupThemeInput");
+const suggestPhaseBtn = document.getElementById("suggestPhaseBtn");
+const setupPhaseSelect = document.getElementById("setupPhaseSelect");
+const phaseSuggestionResult = document.getElementById("phaseSuggestionResult");
+const setupStartBtn = document.getElementById("setupStartBtn");
+
+function setRecordingControlsEnabled(enabled) {
+  startRecordBtn.disabled = !enabled;
+  aiKeywordBtn.disabled = !enabled;
+}
+
+function showSetupModal() {
+  setupModal.classList.remove("hidden");
+  setRecordingControlsEnabled(false);
+}
+
+function hideSetupModal() {
+  setupModal.classList.add("hidden");
+}
+
+async function requestSuggestedPhase() {
+  const theme = setupThemeInput.value.trim();
+  if (!theme) {
+    phaseSuggestionResult.textContent = "テーマを入力してから提案してください。";
+    return;
+  }
+
+  suggestPhaseBtn.disabled = true;
+  phaseSuggestionResult.textContent = "AIが提案中です…";
+
+  try {
+    const res = await fetch('/api/suggest_phase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      phaseSuggestionResult.textContent = data.error || 'フェーズ提案に失敗しました。';
+    } else {
+      if (data.phase) {
+        setupPhaseSelect.value = data.phase;
+      }
+      phaseSuggestionResult.textContent = data.reason || 'AIがフェーズを提案しました。';
     }
+  } catch (e) {
+    phaseSuggestionResult.textContent = '通信エラー: ' + e;
+  } finally {
+    suggestPhaseBtn.disabled = false;
+  }
+}
+
+function finishSetup() {
+  const theme =
+    document.getElementById('setupThemeInput')
+    ?.value?.trim();
+  const phase =
+    document.getElementById('setupPhaseSelect')
+    ?.value;
+
+  if (!theme || !phase) {
+    alert('テーマとフェーズを選択してください。');
+    return;
+  }
+
+  const topicInput =
+    document.getElementById('topicInput');
+  if (topicInput) topicInput.value = theme;
+
+  changePhase(phase);
+
+  const setup =
+    document.getElementById('setupModal');
+  if (setup) setup.classList.add('hidden');
+
+  setRecordingControlsEnabled(true);
+}
+
+suggestPhaseBtn.addEventListener('click', requestSuggestedPhase);
+setupStartBtn.addEventListener('click', finishSetup);
+
+// オンボーディングの状態
+const obState = { job: null, use: null, sheet: null };
+
+// 選択肢のクリック処理を設定する関数
+function setupObOptions(gridId, stateKey, nextBtnId) {
+  const grid = document.getElementById(gridId);
+  const nextBtn = document.getElementById(nextBtnId);
+  grid.querySelectorAll('.ob-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      grid.querySelectorAll('.ob-option')
+          .forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      obState[stateKey] = btn.dataset.value;
+      nextBtn.disabled = false;
+    });
   });
 }
-setupDragSource(keywordsUserEl);
-setupDragSource(keywordsAiEl);
+setupObOptions('ob-job-options',   'job',   'ob-next-0');
+setupObOptions('ob-use-options',   'use',   'ob-next-1');
+setupObOptions('ob-sheet-options', 'sheet', 'ob-next-2');
 
-canvasEl.addEventListener("dragover", e => e.preventDefault());
-canvasEl.addEventListener("drop", (e) => {
-  e.preventDefault();
-  const kw = e.dataTransfer.getData("text/plain");
-  if (!kw) return;
-  const subject = e.dataTransfer.getData("subject") || "";
-  const rect = canvasEl.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+// 画面切り替え
+function goObScreen(n) {
+  document.querySelectorAll('.ob-screen')
+    .forEach(s => s.style.display = 'none');
+  document.querySelector(
+    `.ob-screen[data-screen="${n}"]`
+  ).style.display = 'block';
+  document.querySelectorAll('.ob-dot')
+    .forEach((d, i) => {
+      d.classList.remove('active', 'done');
+      if (i === n) d.classList.add('active');
+      else if (i < n) d.classList.add('done');
+    });
+}
 
-  const note = document.createElement("div");
-  note.className = "note";
+document.getElementById('ob-next-0')
+  .addEventListener('click', () => goObScreen(1));
+document.getElementById('ob-next-1')
+  .addEventListener('click', () => goObScreen(2));
+document.getElementById('ob-next-2')
+  .addEventListener('click', () => {
+    const nsSel = document.getElementById('num-speakers-select');
+    if (nsSel) {
+      window.numSpeakers = parseInt(nsSel.value) || 3;
+      updateNumSpeakersBar();
+    }
+    document.getElementById('onboardingModal')
+      .classList.add('hidden');
+
+    if (obState.sheet === 'design_thinking') {
+      currentTemplate = 'saguru';
+      showSetupModal();
+    } else if (obState.sheet === 'minutes') {
+      currentTemplate = 'minutes';
+      document.getElementById('topicInput').value
+        = '今日の会議';
+      changePhase('minutes');
+      setRecordingControlsEnabled(true);
+    } else if (obState.sheet === 'interview_sheet') {
+      currentTemplate = 'interview';
+      document.getElementById('topicInput').value
+        = '定点面談';
+      changePhase('interview');
+      setRecordingControlsEnabled(true);
+    } else if (obState.sheet === 'custom') {
+      currentTemplate = 'custom';
+      document.getElementById('topicInput').value = '';
+      document.getElementById('customAgendaModal')
+        .classList.remove('hidden');
+    }
+  });
+
+document.getElementById('ob-skip')
+  .addEventListener('click', () => {
+    document.getElementById('onboardingModal').classList.add('hidden');
+    changePhase('saguru');
+    setRecordingControlsEnabled(true);
+  });
+
+  document.getElementById('customAgendaBtn')
+    .addEventListener('click', async () => {
+      const agenda = document.getElementById('customAgendaInput')
+        .value.trim();
+      const status = document.getElementById('customAgendaStatus');
+      const button = document.getElementById('customAgendaBtn');
+      if (!agenda) {
+        status.textContent = 'アジェンダを入力してください。';
+        return;
+      }
+      status.textContent = 'AIがワークシートを生成中…';
+      button.disabled = true;
+
+      try {
+        const res = await fetch('/api/generate_custom_areas', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ agenda })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '生成に失敗しました');
+
+        data.areas.forEach((area, index) => {
+          const num = index + 1;
+          let el = document.getElementById(`area-custom-${num}`);
+          if (!el) el = document.querySelector(`[data-area-id="${area.id}"]`);
+          if (!el) {
+            const allCustomAreas = document.querySelectorAll('.area[data-template="custom"]');
+            if (allCustomAreas[index]) el = allCustomAreas[index];
+          }
+          if (!el) return;
+
+          const label = el.querySelector('.area-label');
+          const hint  = el.querySelector('.area-hint');
+          if (label) label.innerHTML =
+            `${area.emoji || ''} ${area.label || area.name || ''}`.trim();
+          if (hint) hint.textContent = area.hint || area.description || '';
+          el.style.display = '';
+        });
+
+        document.getElementById('customAgendaModal')
+          .classList.add('hidden');
+        document.getElementById('topicInput').value = agenda;
+        changePhase('custom');
+        setRecordingControlsEnabled(true);
+      } catch(e) {
+        status.textContent = 'エラー: ' + e.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+// ==== localStorage セッション保存・復元 ====
+function saveSession() {
+  const notes = Array.from(
+    document.querySelectorAll('#canvas .note')
+  ).map(n => ({
+    keyword:    n.dataset.keyword    || '',
+    quote:      n.dataset.quote      || '',
+    x:          n.style.left,
+    y:          n.style.top,
+    phase:      n.dataset.phase      || '',
+    emoji:      n.dataset.emoji      || '',
+    importance: n.dataset.importance || '',
+    speaker:    n.dataset.speaker    || '',
+    area:       n.dataset.area       || '',
+    type:       n.dataset.type       || '',
+    thought:    n.dataset.thought    || '',
+    who:        n.dataset.who        || '',
+    what:       n.dataset.what       || '',
+    when:       n.dataset.when       || ''
+  }));
+
+  const session = {
+    title:          document.getElementById('topicInput')?.value || '',
+    phase:          currentPhase   || '',
+    template:       currentTemplate || '',
+    memo:           document.getElementById('rawMemo')?.value || '',
+    notes,
+    speakerSummary: window.speakerSummary || null,
+    speakerLabels:  window.speakerLabels  || {},
+    savedAt:        new Date().toISOString()
+  };
+
+  localStorage.setItem('graRec_session', JSON.stringify(session));
+}
+
+function restoreSession(data) {
+  _savingSession = true;
+  try {
+    const topicInput = document.getElementById('topicInput');
+    const rawMemo = document.getElementById('rawMemo');
+    if (topicInput && data.title) topicInput.value = data.title;
+    if (rawMemo && data.memo) rawMemo.value = data.memo;
+    changePhase(data.phase || 'saguru');
+    if (data.template) currentTemplate = data.template;
+
+    // 新フォーマット: notes（未配置含む）
+    (data.notes || []).forEach(n => {
+      const note = createNote(
+        n.keyword, n.emoji, n.subject || '', n.x, n.y,
+        n.quote, true,
+        n.who || '', n.what || '', n.when || '',
+        n.area || ''
+      );
+      note.dataset.phase      = n.phase      || currentPhase;
+      note.dataset.importance = n.importance || 'medium';
+      note.dataset.type       = n.type       || '';
+      note.dataset.thought    = n.thought    || '';
+      if (n.speaker) note.dataset.speaker = n.speaker;
+      if ((n.area || '') === 'unplaced') {
+        const impBorder = { high: '#E85D5D', medium: '#F0A030', low: '#CCCCCC' };
+        note.style.borderLeft = `3px solid ${impBorder[n.importance || 'medium'] || impBorder.medium}`;
+        applyUnplacedNoteStyle(note);
+      }
+    });
+
+    // 旧フォーマット後方互換: cards → キャンバス下部の未配置ノートに変換
+    (data.cards || []).forEach(c => {
+      addKeywordCard(c.keyword, c.emoji, c.quote, c.type, c.thought, '', '', '', undefined, c.importance || 'medium');
+    });
+
+    setRecordingControlsEnabled(true);
+  } finally {
+    _savingSession = false;
+  }
+}
+
+window.addEventListener('load', () => {
+  const onboarding = document.getElementById('onboardingModal');
+  const setup = document.getElementById('setupModal');
+  if (setup) setup.classList.add('hidden');
+
+  function showOnboarding() {
+    if (onboarding) onboarding.classList.remove('hidden');
+    else if (setup) setup.classList.remove('hidden');
+    setRecordingControlsEnabled(false);
+  }
+
+  const saved = localStorage.getItem('graRec_session');
+  if (saved) {
+    try {
+      const session = JSON.parse(saved);
+      if (session.title) {
+        const modal = document.createElement('div');
+        modal.id = 'restore-modal';
+        modal.style.cssText = `
+          position:fixed; top:0; left:0;
+          width:100%; height:100%;
+          background:rgba(0,0,0,0.5);
+          z-index:9999;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+        `;
+        modal.innerHTML = `
+          <div style="background:white; padding:32px;
+            border-radius:16px; max-width:400px;
+            text-align:center;">
+            <p style="font-size:16px; margin-bottom:8px;">
+              📋 前回の続きがあります
+            </p>
+            <p style="font-size:14px; color:#888;
+              margin-bottom:24px;">
+              「${escapeHtml(session.title)}」
+            </p>
+            <button id="btn-restore"
+              style="background:#2A6DB5; color:white;
+              border:none; padding:10px 24px;
+              border-radius:8px; margin-right:8px;
+              cursor:pointer; font-size:14px;">
+              続きから再開する
+            </button>
+            <button id="btn-fresh"
+              style="background:#eee; color:#333;
+              border:none; padding:10px 24px;
+              border-radius:8px; cursor:pointer;
+              font-size:14px;">
+              最初から始める
+            </button>
+          </div>
+        `;
+        document.body.appendChild(modal);
+
+        document.getElementById('btn-restore')
+          .addEventListener('click', () => {
+            restoreSession(session);
+            modal.remove();
+          });
+
+        document.getElementById('btn-fresh')
+          .addEventListener('click', () => {
+            localStorage.removeItem('graRec_session');
+            modal.remove();
+            showOnboarding();
+          });
+        return;
+      }
+    } catch(e) {
+      localStorage.removeItem('graRec_session');
+    }
+  }
+
+  showOnboarding();
+});
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatKeywordDisplay({ keyword, who, what, when }) {
+  if (who || what || when) {
+    const parts = [];
+    if (who) {
+      parts.push(
+        `<span style="color:#1565c0;font-weight:bold;">${highlightNumbers(escapeHtml(who))}</span>`
+      );
+    }
+    if (what) {
+      parts.push(
+        `<span style="font-weight:bold;color:#1a1a1a;">${highlightNumbers(escapeHtml(what))}</span>`
+      );
+    }
+    if (when) {
+      parts.push(
+        `<span style="color:#d32f2f;font-weight:bold;">${highlightNumbers(escapeHtml(when))}</span>`
+      );
+    }
+    return parts.join(' ');
+  }
+  return highlightNumbers(escapeHtml(keyword));
+}
+
+// 数字・日付・曜日を強調表示
+function highlightNumbers(text) {
+  return text.replace(
+    /(\d+|\d+月|\d+日|月曜|火曜|水曜|木曜|金曜|土曜|日曜|来週|今週|今日|明日)/g,
+    '<span style="color:#d32f2f;font-weight:bold;">$1</span>'
+  );
+}
+
+// グラフィコ装飾（将来拡張用）
+function addGraficoElements(note, x, y, kw) { /* no-op */ }
+
+// ノート作成関数
+function createNoteElement(keyword, quote, phase, emoji, who = '', what = '', when = '') {
+  const note = document.createElement('div');
+  note.className = 'note';
+  note.dataset.phase = phase || currentPhase;
+  const textDiv = document.createElement('div');
+  textDiv.className = 'keyword-text';
+  textDiv.innerHTML = formatKeywordDisplay({ keyword, who, what, when });
+  note.appendChild(textDiv);
+  if (quote) {
+    const quoteDiv = document.createElement('div');
+    quoteDiv.className = 'quote';
+    quoteDiv.style.cssText = 'font-size:10px;color:#888;margin-top:2px;';
+    quoteDiv.textContent = '「' + quote + '」';
+    note.appendChild(quoteDiv);
+  }
+  note.style.minWidth = '120px';
+  note.style.minHeight = '60px';
+  note.style.padding = '6px 8px';
+  note.style.wordWrap = 'break-word';
+  note.style.whiteSpace = 'normal';
+  makeNoteDraggable(note);
+  return note;
+}
+
+function createNote(kw, emoji, subject, x, y, quote = '', skipGrafico = false, who = '', what = '', when = '', area = '') {
+  const note = createNoteElement(kw, quote, currentPhase, emoji, who, what, when);
+  note.className += " note-" + currentPhase;
   note.dataset.subject = subject;
-  note.dataset.phase = currentPhase;  // このフェーズの付箋として記録
-  note.style.left = x + "px";
-  note.style.top  = y + "px";
-
-  const spanText = document.createElement("div");
-  spanText.textContent = kw;
-  note.appendChild(spanText);
+  note.dataset.keyword = kw;
+  note.dataset.who = who || '';
+  note.dataset.what = what || '';
+  note.dataset.when = when || '';
+  note.dataset.emoji = emoji || '';
+  note.dataset.quote = quote || '';
+  note.dataset.area = area || '';
 
   if (subject) {
     const spanBadge = document.createElement("div");
@@ -1258,19 +2994,140 @@ canvasEl.addEventListener("drop", (e) => {
     note.appendChild(spanBadge);
   }
 
+  const keywordEl = note.querySelector('.keyword-text') || note;
+  keywordEl.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    keywordEl.contentEditable = 'true';
+    keywordEl.focus();
+    keywordEl.style.background = '#fffbe6';
+    keywordEl.style.outline = '2px solid #f0c040';
+  });
+  keywordEl.addEventListener('blur', () => {
+    keywordEl.contentEditable = 'false';
+    keywordEl.style.background = '';
+    keywordEl.style.outline = '';
+    saveSession();
+  });
+  keywordEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      keywordEl.blur();
+    }
+  });
+
+  // ドラッグ判定フラグ
+  note.addEventListener('mousedown', () => { note._dragged = false; });
+  note.addEventListener('mousemove', () => { note._dragged = true; });
+
+  // クリック時に詳細ポップアップ表示
+  note.addEventListener('click', (e) => {
+    if (note._dragged) { note._dragged = false; return; }
+    e.stopPropagation();
+    const popup = document.getElementById('card-popup');
+    if (!popup) return;
+    const keyword    = note.dataset.keyword    || '';
+    const quote      = note.dataset.quote      || '';
+    const speaker    = note.dataset.speaker    || '';
+    const importance = note.dataset.importance || '';
+    const speakerLabel = window.speakerLabels?.[speaker] || speaker;
+    const kwEl  = popup.querySelector('#popup-keyword');
+    const qEl   = popup.querySelector('#popup-quote');
+    const spEl  = popup.querySelector('#popup-speaker');
+    const impEl = popup.querySelector('#popup-importance');
+    if (kwEl)  kwEl.textContent  = keyword;
+    const cleanQuote = (quote || '').replace(/^「+/, '').replace(/」+$/, '').trim();
+    if (qEl) qEl.textContent = cleanQuote ? `「${cleanQuote}」` : '';
+    if (spEl)  { spEl.textContent = speakerLabel ? `🎤 ${speakerLabel}` : ''; spEl.style.display = speakerLabel ? 'block' : 'none'; }
+    const impMap = { high: '🔴 重要', medium: '🟡 普通', low: '⚪ 参考' };
+    if (impEl) impEl.textContent = impMap[importance] || '';
+    const rect = note.getBoundingClientRect();
+    popup.style.left    = Math.min(rect.right + 8, window.innerWidth - 220) + 'px';
+    popup.style.top     = Math.max(rect.top - 10, 10) + 'px';
+    popup.style.display = 'block';
+  });
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.textContent = '×';
+  deleteBtn.style.cssText = `
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    display: none;
+    z-index: 20;
+  `;
+  deleteBtn.onclick = (e) => {
+    e.stopPropagation();
+    if (confirm('このカードを削除しますか？')) {
+      note.remove();
+      saveSession();
+    }
+  };
+  note.appendChild(deleteBtn);
+  note.addEventListener('mouseenter', () => { deleteBtn.style.display = 'block'; });
+  note.addEventListener('mouseleave', () => { deleteBtn.style.display = 'none'; });
+
+  note.style.left = x + "px";
+  note.style.top = y + "px";
   canvasEl.appendChild(note);
   makeNoteDraggable(note);
   updateNotesVisibility();
-});
+  if (!skipGrafico) {
+    addGraficoElements(note, x, y, kw);
+  }
+  saveSession();
+  return note;
+}
+
+
+function snapNoteToArea(note) {
+  const noteCx = note.offsetLeft + note.offsetWidth / 2;
+  const noteCy = note.offsetTop + note.offsetHeight / 2;
+  let targetArea = null;
+  document.querySelectorAll('#canvas .area').forEach(area => {
+    if (area.style.display === 'none') return;
+    const aL = area.offsetLeft, aT = area.offsetTop;
+    const aR = aL + area.offsetWidth, aB = aT + area.offsetHeight;
+    if (noteCx >= aL && noteCx <= aR && noteCy >= aT && noteCy <= aB) {
+      targetArea = area;
+    }
+  });
+  if (targetArea) {
+    const pad = 4;
+    const labelH = 28;
+    const minL = targetArea.offsetLeft + pad;
+    const minT = targetArea.offsetTop + labelH;
+    const maxL = targetArea.offsetLeft + targetArea.offsetWidth - note.offsetWidth - pad;
+    const maxT = targetArea.offsetTop + targetArea.offsetHeight - note.offsetHeight - pad;
+    note.style.left = Math.max(minL, Math.min(note.offsetLeft, maxL)) + 'px';
+    note.style.top  = Math.max(minT, Math.min(note.offsetTop, maxT)) + 'px';
+    // エリアに配置：area・phase を更新し、サイズをリセット
+    note.dataset.area  = targetArea.id;
+    note.dataset.phase = currentPhase;
+    note.style.width = ''; note.style.height = '';
+    note.style.minWidth = ''; note.style.minHeight = '';
+    note.style.maxWidth = ''; note.style.maxHeight = '';
+    updateNotesVisibility();
+  } else {
+    // エリア外にドロップ → 未配置に戻す
+    note.dataset.area = 'unplaced';
+    note.style.display = 'block';
+    applyUnplacedNoteStyle(note);
+  }
+}
 
 function makeNoteDraggable(note) {
   let isDragging = false;
-  let startX = 0;
-  let startY = 0;
-  let origLeft = 0;
-  let origTop = 0;
+  let startX = 0, startY = 0, origLeft = 0, origTop = 0;
   note.addEventListener("mousedown", (e) => {
     e.preventDefault();
+    e.stopPropagation();
     isDragging = true;
     startX = e.clientX;
     startY = e.clientY;
@@ -1281,24 +3138,501 @@ function makeNoteDraggable(note) {
   });
   function onMouseMove(e) {
     if (!isDragging) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
+    const dx = (e.clientX - startX) / zoom;
+    const dy = (e.clientY - startY) / zoom;
     let newLeft = origLeft + dx;
     let newTop  = origTop + dy;
-    const rect = canvasEl.getBoundingClientRect();
-    const maxLeft = rect.width - note.offsetWidth;
-    const maxTop  = rect.height - note.offsetHeight;
+    const maxLeft = canvasEl.offsetWidth - note.offsetWidth;
+    const maxTop  = canvasEl.offsetHeight - note.offsetHeight;
     newLeft = Math.max(0, Math.min(newLeft, maxLeft));
     newTop  = Math.max(0, Math.min(newTop, maxTop));
     note.style.left = newLeft + "px";
     note.style.top  = newTop + "px";
   }
   function onMouseUp() {
+    if (!isDragging) return;
     isDragging = false;
     document.removeEventListener("mousemove", onMouseMove);
     document.removeEventListener("mouseup", onMouseUp);
+    snapNoteToArea(note);
+    saveSession();
   }
 }
+
+// カスタムエリア情報を収集するヘルパー
+function getCustomAreas() {
+  const areas = [];
+  document.querySelectorAll('#canvas .area').forEach(el => {
+    if (el.style.display === 'none') return;
+    const id = el.id;
+    if (!id) return;
+    const labelEl = el.querySelector('.area-label');
+    let label = '';
+    if (labelEl) {
+      const clone = labelEl.cloneNode(true);
+      clone.querySelectorAll('.icon').forEach(i => i.remove());
+      label = clone.textContent.trim();
+    }
+    const hintEl = el.querySelector('.area-hint');
+    const hint = hintEl ? hintEl.textContent.trim() : '';
+    if (id && label) areas.push({ id, label, hint });
+  });
+  return areas.length > 0 ? areas : null;
+}
+
+// モード切り替え
+const autoLayoutBtn = document.getElementById("autoLayoutBtn");
+const savePngBtn = document.getElementById("savePngBtn");
+
+async function runAutoLayout(showLoading = true) {
+  // 未配置ノートからカードデータを収集
+  const unplacedNotes = document.querySelectorAll('#canvas .note[data-area="unplaced"]');
+  const cardData = Array.from(unplacedNotes).map(note => ({
+    keyword:    note.dataset.keyword    || '',
+    quote:      note.dataset.quote      || '',
+    emoji:      note.dataset.emoji      || '',
+    who:        note.dataset.who        || '',
+    what:       note.dataset.what       || '',
+    when:       note.dataset.when       || '',
+    subject:    note.dataset.subject    || '',
+    type:       note.dataset.type       || '',
+    thought:    note.dataset.thought    || '',
+    importance: note.dataset.importance || 'medium'
+  })).filter(c => c.keyword);
+
+  if (cardData.length === 0) {
+    if (showLoading) alert('未配置のカードがありません');
+    return;
+  }
+  if (showLoading) {
+    autoLayoutBtn.textContent = '⏳ AIが配置中…';
+    autoLayoutBtn.disabled = true;
+    const loading = document.createElement('div');
+    loading.id = 'layout-loading';
+    loading.style.cssText = 'position:absolute;inset:0;background:rgba(255,255,255,0.75);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;font-size:16px;color:#2A6DB5;gap:12px;';
+    loading.innerHTML = '<div style="width:40px;height:40px;border:4px solid #c0d0e8;border-top-color:#2A6DB5;border-radius:50%;animation:spin 0.8s linear infinite;"></div><div>AIがカードを配置しています...</div>';
+    document.getElementById('canvas-wrapper').appendChild(loading);
+  }
+  try {
+    const canvas_width = canvasEl.offsetWidth;
+    const canvas_height = canvasEl.offsetHeight;
+    const res = await fetch('/api/auto_layout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cards: cardData, phase: currentPhase, canvas_width, canvas_height, areas: getCustomAreas() })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      // 既存ノートをすべて削除（未配置含む）
+      document.querySelectorAll('#canvas .note').forEach(note => note.remove());
+      document.querySelectorAll('#canvas .hidden-count-badge').forEach(b => b.remove());
+      notePositions = [];
+
+      const areaGroups = {};
+      data.layout.forEach(item => {
+        if (!areaGroups[item.area]) areaGroups[item.area] = [];
+        areaGroups[item.area].push(item);
+      });
+      const IMP_ORDER = { high: 0, medium: 1, low: 2 };
+      const MAX_VISIBLE = { high: 99, medium: 8, low: 0 };
+      Object.keys(areaGroups).forEach(areaId => {
+        areaGroups[areaId].sort((a, b) => {
+          const aInfo = cardData.find(c => c.keyword === a.keyword);
+          const bInfo = cardData.find(c => c.keyword === b.keyword);
+          const ai = IMP_ORDER[aInfo?.importance] ?? 1;
+          const bi = IMP_ORDER[bInfo?.importance] ?? 1;
+          return ai !== bi ? ai - bi : (a.order - b.order);
+        });
+      });
+      const areaHiddenCount = {};
+      const areaImpCount   = {};
+      const actuallyPlaced = new Set();
+
+      data.layout.forEach((item, index) => {
+        const cardInfo = cardData.find(c => c.keyword === item.keyword);
+        if (!cardInfo) return;
+        const areaEl = document.getElementById(item.area);
+        if (areaEl) {
+          const areaX = areaEl.offsetLeft;
+          const areaY = areaEl.offsetTop;
+          const areaW = areaEl.offsetWidth;
+          const group = areaGroups[item.area];
+          const idx = group.findIndex(g => g.keyword === item.keyword);
+          const cols = Math.max(1, Math.floor((areaW - 16) / 96));
+          const col = idx % cols;
+          const row = Math.floor(idx / cols);
+          const x = areaX + 8 + col * 96;
+          const y = areaY + 30 + row * 80;
+          const note = createNote(
+            cardInfo.keyword, item.emoji || cardInfo.emoji,
+            cardInfo.subject, Math.max(areaX+4, x), Math.max(areaY+30, y),
+            cardInfo.quote, true,
+            cardInfo.who || '', cardInfo.what || '', cardInfo.when || '',
+            item.area
+          );
+          note.dataset.importance = cardInfo.importance || 'medium';
+          const imp = cardInfo.importance || 'medium';
+          if (!areaImpCount[item.area]) areaImpCount[item.area] = {};
+          const cnt = areaImpCount[item.area][imp] || 0;
+          const maxForImp = MAX_VISIBLE[imp] ?? 3;
+          if (cnt >= maxForImp) {
+            note.dataset.hidden = 'true';
+            note.style.display = 'none';
+            areaHiddenCount[item.area] = (areaHiddenCount[item.area] || 0) + 1;
+          } else {
+            areaImpCount[item.area][imp] = cnt + 1;
+          }
+          actuallyPlaced.add(cardInfo.keyword);
+        }
+      });
+
+      // 配置されなかったカードはキャンバス下部に戻す
+      cardData.filter(c => !actuallyPlaced.has(c.keyword)).forEach(c => {
+        addKeywordCard(c.keyword, c.emoji, c.quote, c.type, c.thought,
+          c.who, c.what, c.when, undefined, c.importance);
+      });
+
+      Object.entries(areaHiddenCount).forEach(([areaId, count]) => {
+        if (!count) return;
+        const areaEl = document.getElementById(areaId);
+        if (!areaEl) return;
+        const badge = document.createElement('div');
+        badge.className = 'hidden-count-badge';
+        badge.style.cssText = `
+          position:absolute; bottom:4px; right:8px;
+          font-size:11px; color:#888; background:rgba(255,255,255,0.9);
+          padding:2px 8px; border-radius:10px; border:1px solid #ddd;
+          pointer-events:none;
+        `;
+        badge.textContent = `＋${count}件 📖振り返りで全表示`;
+        areaEl.appendChild(badge);
+      });
+      showDASummary(cardData);
+      saveSession();
+    } else {
+      if (showLoading) alert('⚠️ 配置に失敗しました。もう一度試してください。');
+    }
+  } finally {
+    if (showLoading) {
+      document.getElementById('layout-loading')?.remove();
+      autoLayoutBtn.textContent = 'ワークシートに配置する';
+      autoLayoutBtn.disabled = false;
+    }
+  }
+}
+
+autoLayoutBtn.onclick = () => runAutoLayout(true);
+
+// ==== エリア内カードをimportance順に整理・上限超えを非表示 ====
+function trimAreaCards(areaEl) {
+  const notes = Array.from(areaEl.querySelectorAll('.note'));
+  const order = { high: 0, medium: 1, low: 2 };
+  notes.sort((a, b) =>
+    (order[a.dataset.importance] ?? 1) - (order[b.dataset.importance] ?? 1)
+  );
+  let mediumCount = 0;
+  notes.forEach(note => {
+    const imp = note.dataset.importance || 'medium';
+    if (imp === 'high') {
+      note.style.display = 'block';
+      note.dataset.hidden = 'false';
+    } else if (imp === 'medium') {
+      if (mediumCount < 8) {
+        note.style.display = 'block';
+        note.dataset.hidden = 'false';
+        mediumCount++;
+      } else {
+        note.style.display = 'none';
+        note.dataset.hidden = 'true';
+      }
+    } else {
+      note.style.display = 'none';
+      note.dataset.hidden = 'true';
+    }
+  });
+  const hidden = notes.filter(n => n.dataset.hidden === 'true').length;
+  let badge = areaEl.querySelector('.hidden-count-badge');
+  if (hidden > 0) {
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'hidden-count-badge';
+      badge.style.cssText = `
+        position:absolute; bottom:4px; right:8px;
+        font-size:11px; color:#888; background:rgba(255,255,255,0.9);
+        padding:2px 8px; border-radius:10px; border:1px solid #ddd;
+        pointer-events:none;
+      `;
+      areaEl.appendChild(badge);
+    }
+    badge.textContent = `＋${hidden}件 📖振り返りで全表示`;
+    badge.style.display = '';
+  } else if (badge) {
+    badge.style.display = 'none';
+  }
+}
+
+function addKeywordCard(kw, emoji, quote, type, thought, who, what, when, speaker, importance) {
+  const pos = getNextUnplacedPosition();
+  const note = createNote(
+    kw, '', '', pos.x, pos.y,
+    quote || '', true, who || '', what || '', when || '', 'unplaced'
+  );
+  note.dataset.emoji = emoji || getEmojiForKeyword(kw);
+  const imp = importance || 'medium';
+  note.dataset.type       = type    || '';
+  note.dataset.thought    = thought || '';
+  note.dataset.importance = imp;
+  if (speaker) note.dataset.speaker = speaker;
+  const impBorder = { high: '#E85D5D', medium: '#F0A030', low: '#CCCCCC' };
+  note.style.borderLeft = `3px solid ${impBorder[imp] || impBorder.medium}`;
+  applyUnplacedNoteStyle(note);
+  saveSession();
+  return note;
+}
+
+async function startRealtimeMode() {
+  const interval = parseInt(document.getElementById('realtimeInterval').value) * 1000;
+  realtimeRunning = true;
+  processedLength = 0;
+
+  const tick = async () => {
+    if (!realtimeRunning) return;
+
+    const memo = document.getElementById('rawMemo').value;
+    const newText = memo.slice(processedLength).trim();
+
+    if (newText.length > 20) {
+      document.getElementById('realtimeStatus').textContent = '🔄 処理中...';
+      try {
+        const res = await fetch('/api/extract_keywords', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ memo: newText, phase: currentPhase, template: currentTemplate || "", areas: getCustomAreas() })
+        });
+        const data = await res.json();
+
+        if (data.ok && data.keywords?.length > 0) {
+          data.keywords.forEach(item => {
+            const kw = item.keyword || '';
+            if (!kw) return;
+            addKeywordCard(
+              kw,
+              getEmojiForKeyword(kw),
+              item.quote || '',
+              item.type || '',
+              item.thought || '',
+              item.who || '',
+              item.what || '',
+              item.when || '',
+              undefined,
+              item.importance || ''
+            );
+          });
+          processedLength = memo.length;
+          await runAutoLayout(false);
+          document.getElementById('realtimeStatus').textContent =
+            '✅ ' + new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) + ' 更新';
+        } else {
+          document.getElementById('realtimeStatus').textContent = '⏳ 次の更新を待っています...';
+        }
+      } catch (e) {
+        document.getElementById('realtimeStatus').textContent = '⚠️ 処理エラー、次回再試行';
+      }
+    } else {
+      document.getElementById('realtimeStatus').textContent = '🎤 話し合い中...';
+    }
+
+    if (realtimeRunning) {
+      realtimeTimer = setTimeout(tick, interval);
+    }
+  };
+
+  realtimeTimer = setTimeout(tick, interval);
+}
+
+function stopRealtimeMode() {
+  realtimeRunning = false;
+  if (realtimeTimer) {
+    clearTimeout(realtimeTimer);
+    realtimeTimer = null;
+  }
+  document.getElementById('realtimeStatus').textContent = '';
+}
+
+// DA分布サマリをサイドバーのチップとして表示
+function showDASummary(cardData) {
+  const typeCount = {};
+  const thoughtCount = {};
+  cardData.forEach(c => {
+    if (c.type) typeCount[c.type] = (typeCount[c.type] || 0) + 1;
+    if (c.thought) thoughtCount[c.thought] = (thoughtCount[c.thought] || 0) + 1;
+  });
+
+  const chipsEl = document.getElementById('da-chips');
+  const section = document.getElementById('da-chips-section');
+  if (!chipsEl) return;
+
+  chipsEl.innerHTML = '';
+  Object.entries(typeCount).forEach(([k, v]) => {
+    const chip = document.createElement('span');
+    chip.className = 'da-chip';
+    chip.style.cssText = 'background:#e8f0fe;color:#1a73e8;';
+    chip.textContent = `${k} ${v}`;
+    chipsEl.appendChild(chip);
+  });
+  Object.entries(thoughtCount).forEach(([k, v]) => {
+    const chip = document.createElement('span');
+    chip.className = 'da-chip';
+    chip.style.cssText = 'background:#f3e8ff;color:#7b2ff7;';
+    chip.textContent = `${k} ${v}`;
+    chipsEl.appendChild(chip);
+  });
+  if (section) section.style.display = chipsEl.children.length > 0 ? '' : 'none';
+  // 旧 da-summary を削除
+  document.getElementById('da-summary')?.remove();
+}
+
+function renderSpeakerSummary() {
+  if (!window.speakerSummary) return;
+  // speakerLabels を初期化（エディタブルUIは削除済み）
+  window.speakerSummary.forEach(s => {
+    if (!window.speakerLabels[s.speaker]) {
+      window.speakerLabels[s.speaker] = s.speaker;
+    }
+  });
+}
+
+savePngBtn.onclick = async () => {
+  if (!savePngBtn) return;
+  savePngBtn.disabled = true;
+  const originalDisplay = savePngBtn.style.display;
+  try {
+    savePngBtn.style.display = 'none';
+    const canvasImage = await html2canvas(document.getElementById('canvas'));
+    const imageData = canvasImage.toDataURL('image/png');
+    const title = document.getElementById('topicInput').value || '話し合いグラレコ';
+
+    // ダウンロード処理（従来のまま）
+    const link = document.createElement('a');
+    const today = new Date().toISOString().slice(0, 10);
+    link.download = title + '_' + today + '.png';
+    link.href = imageData;
+    link.click();
+
+    // サーバーに保存
+    const response = await fetch('/api/save_png', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: imageData, title: title })
+    });
+    const result = await response.json();
+    if (result.ok) {
+      alert('保存しました');
+    } else {
+      alert('サーバー保存エラー: ' + result.error);
+    }
+  } catch (e) {
+    console.error('PNG保存エラー:', e);
+    alert('保存エラーが発生しました');
+  } finally {
+    savePngBtn.style.display = originalDisplay;
+    savePngBtn.disabled = false;
+  }
+};
+
+// セッションリセット機能
+// ==== 参加人数バー ====
+function updateNumSpeakersBar() {
+  const disp = document.getElementById('num-speakers-display');
+  const inl  = document.getElementById('num-speakers-inline');
+  if (!disp) return;
+  const n = window.numSpeakers;
+  disp.textContent = n === 0 ? '自動検出' : `${n}人`;
+  if (inl) {
+    inl.value = String(n);
+    inl.style.display = 'none';
+  }
+}
+
+document.getElementById('num-speakers-change')
+  ?.addEventListener('click', () => {
+    const inl = document.getElementById('num-speakers-inline');
+    if (!inl) return;
+    inl.style.display = inl.style.display === 'none' ? 'inline-block' : 'none';
+  });
+
+document.getElementById('num-speakers-inline')
+  ?.addEventListener('change', (e) => {
+    window.numSpeakers = parseInt(e.target.value) || 0;
+    updateNumSpeakersBar();
+  });
+
+
+document.getElementById('card-popup-close')
+  ?.addEventListener('click', () => {
+    document.getElementById('card-popup').style.display = 'none';
+  });
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#card-popup') && !e.target.closest('.note')) {
+    const p = document.getElementById('card-popup');
+    if (p) p.style.display = 'none';
+  }
+});
+
+// ==== 振り返りモード ====
+document.getElementById('reviewModeToggle')?.addEventListener('change', (e) => {
+  const isReview = e.target.checked;
+  if (isReview) {
+    document.querySelectorAll('#canvas .note[data-hidden="true"]')
+      .forEach(n => { n.style.display = 'block'; });
+    document.querySelectorAll('#canvas .hidden-count-badge')
+      .forEach(b => { b.style.display = 'none'; });
+    canvasEl.style.background = '#F0F4FF';
+  } else {
+    document.querySelectorAll('#canvas .note[data-hidden="true"]')
+      .forEach(n => { n.style.display = 'none'; });
+    document.querySelectorAll('#canvas .hidden-count-badge')
+      .forEach(b => { b.style.display = ''; });
+    canvasEl.style.background = '';
+  }
+});
+
+resetSessionBtn.onclick = () => {
+  if (confirm('新しい話し合いを始めますか？\n現在の内容は消えます。')) {
+    localStorage.removeItem(SESSION_KEY);
+    const canvas = document.getElementById('canvas');
+    if (canvas) {
+      canvas.querySelectorAll('.note').forEach(note => note.remove());
+    }
+
+    const rawMemo = document.getElementById('rawMemo');
+    if (rawMemo) rawMemo.value = '';
+
+    const topicInput = document.getElementById('topicInput');
+    if (topicInput) topicInput.value = '';
+
+    const aiKeywordStatusEl = document.getElementById('aiKeywordStatus');
+    if (aiKeywordStatusEl) aiKeywordStatusEl.textContent = '';
+    const transcribeStatusEl = document.getElementById('transcribeStatus');
+    if (transcribeStatusEl) transcribeStatusEl.textContent = '';
+    const recordStatusEl = document.getElementById('recordStatus');
+    if (recordStatusEl) recordStatusEl.textContent = '';
+
+    const daSummary = document.getElementById('da-summary');
+    if (daSummary) daSummary.remove();
+
+    const customAgendaModal = document.getElementById('customAgendaModal');
+    if (customAgendaModal) customAgendaModal.classList.add('hidden');
+
+    const onboardingModal = document.getElementById('onboardingModal');
+    if (onboardingModal) onboardingModal.classList.remove('hidden');
+    const setupModal = document.getElementById('setupModal');
+    if (setupModal) setupModal.classList.add('hidden');
+
+    setRecordingControlsEnabled(false);
+  }
+};
 
 // 先生ビューのダミー切り替え
 const teamItems = document.querySelectorAll(".team-item");

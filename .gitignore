@@ -1,0 +1,40 @@
+# 環境変数（APIキーなど、絶対にコミットしない）
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# macOS
+.DS_Store
+static/.DS_Store
+
+# 音声・テストデータ（デプロイ不要）
+*.wav
+*.m4a
+interview_*.rttm
+
+# AMI Corpusデータ（デプロイ不要）
+static/amicorpus/
+static/ES2008a.*
+static/CCBY4.0.txt
+static/download.sh
+
+# ラベリング・研究データ（デプロイ不要、リポジトリを分けるか別管理）
+static/label_data.py
+static/label_data_context.py
+static/labeled_data_context.json
+static/labeled_data_final.json
+labeled_data_context.json
+human_labeling_template.csv
+human_labeling_done.csv
+evaluate_da_classification.py
+make_labeling_csv.py
+keyword_extraction_pipeline.py
+keyword_layout_mapper.py
+
+# 保存された画像（実行時に生成されるもの）
+static/saved/
+static/images/

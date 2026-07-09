@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>振り返り | GraRec</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      background: #F0F4FF;
+      color: #1a1a1a;
+      min-height: 100vh;
+    }
+    header {
+      background: #1A3A5C;
+      color: white;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    header h1 { font-size: 20px; letter-spacing: 0.5px; }
+    header .header-actions { display: flex; gap: 10px; }
+    .btn {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: 'Noto Sans JP', sans-serif;
+      letter-spacing: 0.3px;
+    }
+    .btn-primary { background: #2A6DB5; color: white; }
+    .btn-secondary { background: rgba(255,255,255,0.15); color: white; }
+    .btn:hover { opacity: 0.85; }
+
+    main { max-width: 960px; margin: 0 auto; padding: 24px 20px 60px; }
+
+    /* メタ情報 */
+    #review-meta {
+      background: white;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+    }
+    #review-meta h2 {
+      font-size: 20px;
+      color: #1A3A5C;
+      margin-bottom: 4px;
+    }
+    #review-meta .meta-sub {
+      font-size: 12px;
+      color: #888;
+      display: flex;
+      gap: 16px;
+      margin-top: 6px;
+    }
+
+    /* 発言量サマリー */
+    #speaker-section {
+      background: white;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+    }
+    #speaker-section h3 {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 12px;
+    }
+    .speaker-bar-row { margin: 8px 0; }
+    .speaker-bar-label {
+      font-size: 12px;
+      color: #333;
+      margin-bottom: 3px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .speaker-bar-track {
+      background: #e0e0e0;
+      border-radius: 4px;
+      height: 18px;
+      width: 100%;
+      overflow: hidden;
+    }
+    .speaker-bar-fill {
+      background: #2A6DB5;
+      border-radius: 4px;
+      height: 18px;
+      transition: width 0.4s;
+    }
+
+    /* カードセクション */
+    #review-cards h3 {
+      font-size: 14px;
+      font-weight: bold;
+      color: #1A3A5C;
+      border-left: 4px solid #2A6DB5;
+      padding-left: 10px;
+      margin: 24px 0 12px;
+    }
+    .cards-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .review-card {
+      width: 140px;
+      min-height: 80px;
+      background: #FFFDE7;
+      border-radius: 4px;
+      box-shadow: 2px 2px 6px rgba(0,0,0,0.15);
+      padding: 8px;
+      font-size: 12px;
+      display: inline-block;
+      vertical-align: top;
+      border-left: 4px solid #F0A030;
+      word-break: break-word;
+    }
+    .card-keyword {
+      font-weight: bold;
+      font-size: 13px;
+      margin-bottom: 4px;
+      line-height: 1.3;
+      color: #1a1a1a;
+    }
+    .card-quote {
+      font-size: 10px;
+      color: #888;
+      line-height: 1.4;
+      margin-bottom: 4px;
+    }
+    .speaker-badge {
+      display: inline-block;
+      font-size: 10px;
+      background: #E8F0F8;
+      color: #2A6DB5;
+      padding: 1px 6px;
+      border-radius: 8px;
+      margin-top: 2px;
+    }
+
+    /* キーワードカード一覧 */
+    #cards-section {
+      background: white;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-top: 24px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+    }
+    #cards-section h3 {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 12px;
+      border-left: none;
+      padding-left: 0;
+    }
+
+    /* データなし */
+    #no-data {
+      display: none;
+      text-align: center;
+      padding: 60px 20px;
+      color: #888;
+      font-size: 15px;
+    }
+    #no-data p { margin-bottom: 20px; }
+
+    /* PNG保存中オーバーレイ */
+    #save-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(255,255,255,0.8);
+      align-items: center; justify-content: center;
+      font-size: 16px; color: #2A6DB5;
+      z-index: 999;
+    }
+    #save-overlay.active { display: flex; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📖 振り返りページ</h1>
+  <div class="header-actions">
+    <button class="btn btn-secondary" id="savePngBtn">💾 PNG保存</button>
+    <button class="btn btn-secondary" onclick="location.href='/'">← GraRecに戻る</button>
+  </div>
+</header>
+
+<main id="main-content">
+
+  <!-- データなし -->
+  <div id="no-data">
+    <p>振り返りデータがありません。<br>話し合いを終えてから開いてください。</p>
+    <button class="btn btn-primary" onclick="location.href='/'">GraRecに戻る</button>
+  </div>
+
+  <!-- メタ情報 -->
+  <div id="review-meta" style="display:none;">
+    <h2 id="review-title"></h2>
+    <div class="meta-sub">
+      <span id="review-date"></span>
+      <span id="review-template"></span>
+    </div>
+  </div>
+
+  <!-- 発言量サマリー -->
+  <div id="speaker-section" style="display:none;">
+    <h3>🎤 発言量サマリー</h3>
+    <div id="speaker-bars"></div>
+  </div>
+
+  <!-- ノートカード（フェーズ別） -->
+  <div id="review-cards"></div>
+
+  <!-- キーワードカード一覧 -->
+  <div id="cards-section" style="display:none;">
+    <h3>📌 キーワードカード一覧</h3>
+    <div id="cards-list" class="cards-row"></div>
+  </div>
+
+</main>
+
+<div id="save-overlay">💾 PNG保存中...</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+const TEMPLATE_LABELS = {
+  saguru: 'デザイン思考（さぐる）',
+  kizuku: 'デザイン思考（きづく）',
+  hirameku: 'デザイン思考（ひらめく）',
+  tsukuru: 'デザイン思考（つくる）',
+  tamesu: 'デザイン思考（ためす）',
+  minutes: '議事録',
+  interview: '面談記録',
+  custom: 'カスタム',
+};
+
+const IMP_COLOR = { high: '#E85D5D', medium: '#F0A030', low: '#CCCCCC' };
+const IMP_ORDER = { high: 0, medium: 1, low: 2 };
+
+function renderSpeakerBar(summary, labels) {
+  const container = document.getElementById('speaker-bars');
+  summary.forEach(s => {
+    const name = (labels && labels[s.speaker]) || s.speaker;
+    const row = document.createElement('div');
+    row.className = 'speaker-bar-row';
+    row.innerHTML = `
+      <div class="speaker-bar-label">
+        <span>${name}</span>
+        <span>${s.percentage}% ／ ${s.count}回発言</span>
+      </div>
+      <div class="speaker-bar-track">
+        <div class="speaker-bar-fill" style="width:${s.percentage}%"></div>
+      </div>`;
+    container.appendChild(row);
+  });
+  document.getElementById('speaker-section').style.display = '';
+}
+
+function makeCard(data, labels) {
+  const el = document.createElement('div');
+  el.className = 'review-card';
+  const imp = data.importance || 'medium';
+  el.style.borderLeft = `4px solid ${IMP_COLOR[imp] || IMP_COLOR.medium}`;
+
+  const speakerLabel = data.speaker
+    ? ((labels && labels[data.speaker]) || data.speaker)
+    : '';
+
+  el.innerHTML = `
+    <div class="card-keyword">${data.keyword || ''}</div>
+    <div class="card-quote">${data.quote ? '「' + data.quote + '」' : ''}</div>
+    ${speakerLabel ? `<span class="speaker-badge">🎤 ${speakerLabel}</span>` : ''}
+  `;
+  return el;
+}
+
+window.addEventListener('load', () => {
+  const raw = localStorage.getItem('graRec_session');
+  if (!raw) {
+    document.getElementById('no-data').style.display = 'block';
+    return;
+  }
+
+  let session;
+  try { session = JSON.parse(raw); }
+  catch (e) {
+    document.getElementById('no-data').style.display = 'block';
+    return;
+  }
+
+  const labels = session.speakerLabels || {};
+
+  // メタ情報
+  document.getElementById('review-title').textContent =
+    session.title || '無題の話し合い';
+  document.getElementById('review-date').textContent =
+    session.savedAt
+      ? new Date(session.savedAt).toLocaleString('ja-JP')
+      : '';
+  document.getElementById('review-template').textContent =
+    TEMPLATE_LABELS[session.template] || session.template || '';
+  document.getElementById('review-meta').style.display = '';
+
+  // 発言量サマリー
+  if (session.speakerSummary && session.speakerSummary.length > 0) {
+    renderSpeakerBar(session.speakerSummary, labels);
+  }
+
+  // ノートをフェーズ別に表示
+  const notes = session.notes || [];
+  if (notes.length > 0) {
+    const byPhase = {};
+    notes.forEach(n => {
+      const key = n.phase || 'その他';
+      if (!byPhase[key]) byPhase[key] = [];
+      byPhase[key].push(n);
+    });
+
+    const container = document.getElementById('review-cards');
+    const phaseLabel = {
+      saguru: '①さぐる', kizuku: '②きづく', hirameku: '③ひらめく',
+      tsukuru: '④つくる', tamesu: '⑤ためす',
+      minutes: '議事録', interview: '面談記録', custom: 'カスタム',
+    };
+
+    Object.entries(byPhase).forEach(([phase, cards]) => {
+      cards.sort((a, b) =>
+        (IMP_ORDER[a.importance] ?? 1) - (IMP_ORDER[b.importance] ?? 1)
+      );
+
+      const section = document.createElement('div');
+      const h3 = document.createElement('h3');
+      h3.textContent = phaseLabel[phase] || phase;
+      section.appendChild(h3);
+
+      const row = document.createElement('div');
+      row.className = 'cards-row';
+      cards.forEach(card => row.appendChild(makeCard(card, labels)));
+      section.appendChild(row);
+      container.appendChild(section);
+    });
+  }
+
+  // キーワードカード一覧
+  const cards = session.cards || [];
+  if (cards.length > 0) {
+    const list = document.getElementById('cards-list');
+    cards
+      .slice()
+      .sort((a, b) =>
+        (IMP_ORDER[a.importance] ?? 1) - (IMP_ORDER[b.importance] ?? 1)
+      )
+      .forEach(c => list.appendChild(makeCard(c, labels)));
+    document.getElementById('cards-section').style.display = '';
+  }
+});
+
+// PNG保存
+document.getElementById('savePngBtn').addEventListener('click', async () => {
+  const overlay = document.getElementById('save-overlay');
+  overlay.classList.add('active');
+  try {
+    const canvas = await html2canvas(document.getElementById('main-content'), {
+      backgroundColor: '#F0F4FF',
+      scale: 2,
+      useCORS: true
+    });
+    const link = document.createElement('a');
+    const title = document.getElementById('review-title').textContent || '振り返り';
+    link.download = `${title}_振り返り.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } catch (e) {
+    console.error('PNG保存エラー:', e);
+    alert('PNG保存に失敗しました。');
+  } finally {
+    overlay.classList.remove('active');
+  }
+});
+</script>
+</body>
+</html>
