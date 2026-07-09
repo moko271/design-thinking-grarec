@@ -38,3 +38,5 @@ keyword_layout_mapper.py
 # 保存された画像（実行時に生成されるもの）
 static/saved/
 static/images/
+requirements_full.txt
+test_env/
