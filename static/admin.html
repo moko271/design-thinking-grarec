@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>GraRec 管理画面</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; background: #f5f8fc; }
+    header {
+      background: #1A3A5C; color: white;
+      padding: 0 24px; height: 52px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    header h1 { font-size: 18px; margin: 0; }
+    header span { font-size: 12px; opacity: 0.7; }
+    main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+    h2 { font-size: 16px; color: #333; margin-bottom: 16px; }
+    #status { font-size: 13px; color: #888; margin-bottom: 12px; }
+    table {
+      width: 100%; border-collapse: collapse;
+      background: white; border-radius: 10px;
+      overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      font-size: 13px;
+    }
+    thead { background: #1A3A5C; color: white; }
+    th { padding: 10px 14px; text-align: left; font-weight: 600; }
+    td { padding: 10px 14px; border-bottom: 1px solid #eef0f4; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f0f4ff; }
+    .badge {
+      display: inline-block; padding: 2px 8px;
+      border-radius: 12px; font-size: 11px; font-weight: bold;
+    }
+    .badge-group { background: #e3f0ff; color: #1A5CB5; }
+    .badge-phase { background: #fff3e0; color: #b55a00; }
+    .speaker-bar {
+      display: flex; gap: 2px; margin-top: 4px; height: 6px;
+    }
+    .speaker-seg { height: 100%; border-radius: 2px; }
+    a { color: #2A6DB5; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .reload-btn {
+      background: #2A6DB5; color: white; border: none;
+      padding: 6px 16px; border-radius: 6px; cursor: pointer;
+      font-size: 13px; margin-left: 12px;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>GraRec</h1>
+  <span>管理画面 — セッション一覧</span>
+</header>
+<main>
+  <h2>
+    保存済みセッション
+    <button class="reload-btn" onclick="load()">更新</button>
+  </h2>
+  <div id="status">読み込み中…</div>
+  <table id="tbl" style="display:none">
+    <thead>
+      <tr>
+        <th>班</th>
+        <th>タイトル</th>
+        <th>フェーズ</th>
+        <th>カード数</th>
+        <th>発話サマリー</th>
+        <th>保存日時</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</main>
+<script>
+const SPEAKER_COLORS = [
+  '#4A90D9','#E85D5D','#27AE60','#F0A030',
+  '#9B59B6','#16A085','#E67E22','#2C3E50'
+];
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} `
+       + `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+function phaseLabel(p) {
+  const map = {
+    saguru:'①さぐる', kizuku:'②きづく', hirameku:'③ひらめく',
+    tsukuru:'④つくる', tamesu:'⑤ためす',
+    minutes:'議事録', interview:'面談', custom:'カスタム'
+  };
+  return map[p] || p || '—';
+}
+
+function speakerBar(summary) {
+  if (!summary || summary.length === 0) return '—';
+  const total = summary.reduce((s, x) => s + (x.duration || 0), 0);
+  const bars = summary.map((s, i) => {
+    const pct = total > 0 ? (s.duration / total * 100).toFixed(1) : 0;
+    return `<div class="speaker-seg" style="width:${pct}%;background:${SPEAKER_COLORS[i % SPEAKER_COLORS.length]};" title="${s.speaker || s.label}: ${pct}%"></div>`;
+  }).join('');
+  const labels = summary.map((s, i) =>
+    `<span style="color:${SPEAKER_COLORS[i % SPEAKER_COLORS.length]};font-size:11px;">
+      ${s.label || s.speaker}: ${s.percentage ?? (total>0?(s.duration/total*100).toFixed(0):0)}%
+    </span>`
+  ).join('　');
+  return `<div class="speaker-bar">${bars}</div><div style="margin-top:3px;">${labels}</div>`;
+}
+
+async function load() {
+  document.getElementById('status').textContent = '読み込み中…';
+  document.getElementById('tbl').style.display = 'none';
+  try {
+    const res = await fetch('/api/list_sessions');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+    if (data.sessions.length === 0) {
+      document.getElementById('status').textContent = 'セッションはまだありません。';
+      return;
+    }
+    data.sessions.forEach(s => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><span class="badge badge-group">班${s.group_number || '?'}</span></td>
+        <td>${s.title ? s.title.replace(/</g,'&lt;') : '（タイトルなし）'}</td>
+        <td><span class="badge badge-phase">${phaseLabel(s.phase)}</span></td>
+        <td style="text-align:center;">${s.note_count}</td>
+        <td>${speakerBar(s.speaker_summary)}</td>
+        <td style="white-space:nowrap;">${fmtDate(s.saved_at)}</td>
+        <td><a href="/?session=${encodeURIComponent(s.session_id)}" target="_blank">開く</a></td>
+      `;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('status').textContent = `${data.sessions.length} 件のセッション`;
+    document.getElementById('tbl').style.display = 'table';
+  } catch(e) {
+    document.getElementById('status').textContent = 'エラー: ' + e.message;
+  }
+}
+
+load();
+</script>
+</body>
+</html>

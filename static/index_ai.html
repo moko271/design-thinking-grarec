@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <title>GraRec - 話し合いを、一枚の絵に。</title>
+  <title>GraRec</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
@@ -980,9 +980,6 @@
       <span style="font-size:18px; font-weight:700;">
         GraRec
       </span>
-      <span style="font-size:12px; opacity:0.7;">
-        話し合いを、一枚の絵に。
-      </span>
     </div>
     <div style="display:flex; align-items:center; gap:8px;
                 font-size:12px;">
@@ -1148,6 +1145,15 @@
             <option value="5">5人</option>
             <option value="0">自動検出</option>
           </select>
+        </div>
+        <div style="margin-top:14px;">
+          <label style="font-size:13px; color:#555; display:block; margin-bottom:6px;">
+            🔢 班番号を入力してください（例：1）
+          </label>
+          <input type="number" id="group-number-input" min="1" max="99"
+            placeholder="班番号（数字）"
+            style="font-size:14px; padding:6px 10px; border:1px solid #ccc;
+                   border-radius:8px; width:100%; box-sizing:border-box;">
         </div>
         <button class="ob-next" id="ob-next-2"
                 type="button" disabled>はじめる →</button>
@@ -2668,6 +2674,17 @@ document.getElementById('ob-next-2')
       window.numSpeakers = parseInt(nsSel.value) || 3;
       updateNumSpeakersBar();
     }
+    const groupInput = document.getElementById('group-number-input');
+    window.groupNumber = groupInput ? (groupInput.value.trim() || '0') : '0';
+    const now = new Date();
+    const ts = now.getFullYear().toString()
+      + String(now.getMonth()+1).padStart(2,'0')
+      + String(now.getDate()).padStart(2,'0')
+      + '_' + String(now.getHours()).padStart(2,'0')
+      + String(now.getMinutes()).padStart(2,'0')
+      + String(now.getSeconds()).padStart(2,'0');
+    window.sessionId = `班${window.groupNumber}_${ts}`;
+    window.sessionCreatedAt = now.toISOString();
     document.getElementById('onboardingModal')
       .classList.add('hidden');
 
@@ -2697,6 +2714,10 @@ document.getElementById('ob-next-2')
 document.getElementById('ob-skip')
   .addEventListener('click', () => {
     document.getElementById('onboardingModal').classList.add('hidden');
+    if (!window.sessionId) {
+      window.sessionId = 'session_' + Date.now();
+      window.sessionCreatedAt = new Date().toISOString();
+    }
     changePhase('saguru');
     setRecordingControlsEnabled(true);
   });
@@ -2775,6 +2796,8 @@ function saveSession() {
   }));
 
   const session = {
+    session_id:     window.sessionId     || '',
+    group_number:   window.groupNumber   || '',
     title:          document.getElementById('topicInput')?.value || '',
     phase:          currentPhase   || '',
     template:       currentTemplate || '',
@@ -2782,10 +2805,60 @@ function saveSession() {
     notes,
     speakerSummary: window.speakerSummary || null,
     speakerLabels:  window.speakerLabels  || {},
+    created_at:     window.sessionCreatedAt || '',
     savedAt:        new Date().toISOString()
   };
 
   localStorage.setItem('graRec_session', JSON.stringify(session));
+  saveToServer();
+}
+
+// ==== サーバー保存（3秒デバウンス）====
+let _serverSaveTimer = null;
+function saveToServer() {
+  if (!window.sessionId) return;
+  clearTimeout(_serverSaveTimer);
+  _serverSaveTimer = setTimeout(async () => {
+    const notes = Array.from(
+      document.querySelectorAll('#canvas .note')
+    ).map(n => ({
+      keyword:    n.dataset.keyword    || '',
+      quote:      n.dataset.quote      || '',
+      x:          n.style.left,
+      y:          n.style.top,
+      phase:      n.dataset.phase      || '',
+      emoji:      n.dataset.emoji      || '',
+      importance: n.dataset.importance || '',
+      speaker:    n.dataset.speaker    || '',
+      area:       n.dataset.area       || '',
+      type:       n.dataset.type       || '',
+      thought:    n.dataset.thought    || '',
+      who:        n.dataset.who        || '',
+      what:       n.dataset.what       || '',
+      when:       n.dataset.when       || ''
+    }));
+    const payload = {
+      session_id:     window.sessionId,
+      group_number:   window.groupNumber   || '',
+      title:          document.getElementById('topicInput')?.value || '',
+      phase:          currentPhase   || '',
+      template:       currentTemplate || '',
+      memo:           document.getElementById('rawMemo')?.value || '',
+      notes,
+      speakerSummary: window.speakerSummary || null,
+      speakerLabels:  window.speakerLabels  || {},
+      created_at:     window.sessionCreatedAt || ''
+    };
+    try {
+      await fetch('/api/save_session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch(e) {
+      console.warn('サーバー保存失敗:', e);
+    }
+  }, 3000);
 }
 
 function restoreSession(data) {
@@ -2829,7 +2902,7 @@ function restoreSession(data) {
   }
 }
 
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
   const onboarding = document.getElementById('onboardingModal');
   const setup = document.getElementById('setupModal');
   if (setup) setup.classList.add('hidden');
@@ -2838,6 +2911,25 @@ window.addEventListener('load', () => {
     if (onboarding) onboarding.classList.remove('hidden');
     else if (setup) setup.classList.remove('hidden');
     setRecordingControlsEnabled(false);
+  }
+
+  // URLパラメータ ?session=xxx でサーバーから復元
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlSession = urlParams.get('session');
+  if (urlSession) {
+    try {
+      const res = await fetch(`/api/get_session/${encodeURIComponent(urlSession)}`);
+      const data = await res.json();
+      if (data.ok && data.session) {
+        window.sessionId       = data.session.session_id || urlSession;
+        window.groupNumber     = data.session.group_number || '';
+        window.sessionCreatedAt = data.session.created_at || '';
+        restoreSession(data.session);
+        return;
+      }
+    } catch(e) {
+      console.warn('サーバーからの復元に失敗しました:', e);
+    }
   }
 
   const saved = localStorage.getItem('graRec_session');
@@ -2856,6 +2948,8 @@ window.addEventListener('load', () => {
           align-items:center;
           justify-content:center;
         `;
+        const groupLabel = session.group_number
+          ? `班${session.group_number}・` : '';
         modal.innerHTML = `
           <div style="background:white; padding:32px;
             border-radius:16px; max-width:400px;
@@ -2865,7 +2959,7 @@ window.addEventListener('load', () => {
             </p>
             <p style="font-size:14px; color:#888;
               margin-bottom:24px;">
-              「${escapeHtml(session.title)}」
+              ${groupLabel}「${escapeHtml(session.title)}」
             </p>
             <button id="btn-restore"
               style="background:#2A6DB5; color:white;
@@ -2887,6 +2981,11 @@ window.addEventListener('load', () => {
 
         document.getElementById('btn-restore')
           .addEventListener('click', () => {
+            if (session.session_id) {
+              window.sessionId        = session.session_id;
+              window.groupNumber      = session.group_number || '';
+              window.sessionCreatedAt = session.created_at  || '';
+            }
             restoreSession(session);
             modal.remove();
           });

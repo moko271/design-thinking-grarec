@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 import json
 import base64
@@ -25,6 +26,19 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY が .env に設定されていません。")
+
+# =========================
+# データ永続化ディレクトリ
+# =========================
+DATA_DIR       = os.getenv("DATA_DIR", "data")
+SESSIONS_DIR   = os.getenv("SESSIONS_DIR",   os.path.join(DATA_DIR, "sessions"))
+RECORDINGS_DIR = os.getenv("RECORDINGS_DIR", os.path.join(DATA_DIR, "recordings"))
+
+for _d in (SESSIONS_DIR, RECORDINGS_DIR):
+    try:
+        os.makedirs(_d, exist_ok=True)
+    except OSError as _e:
+        print(f"Warning: ディレクトリ作成失敗 {_d}: {_e}")
 
 # =========================
 # pyannote パイプラインキャッシュ
@@ -152,6 +166,11 @@ def index_ai():
 @app.route("/review")
 def review():
     return send_from_directory("static", "review.html")
+
+
+@app.route("/admin")
+def admin():
+    return send_from_directory("static", "admin.html")
 
 
 # =========================
@@ -568,6 +587,12 @@ def transcribe_with_speakers():
         print("transcribe_with_speakers error:", traceback.format_exc())
         return jsonify({"ok": False, "error": str(e)}), 500
     finally:
+        try:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            rec_name = f"rec_{ts}{suffix}"
+            shutil.copy2(tmp_path, os.path.join(RECORDINGS_DIR, rec_name))
+        except Exception as _e:
+            print(f"Warning: 録音ファイル保存失敗: {_e}")
         try:
             os.remove(tmp_path)
         except OSError:
@@ -993,6 +1018,13 @@ def transcribe_chunk():
         return jsonify({"ok": False, "error": str(e)}), 500
     finally:
         try:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            start_sec = int(chunk_start)
+            rec_name = f"chunk_{ts}_{start_sec}s{suffix}"
+            shutil.copy2(tmp_path, os.path.join(RECORDINGS_DIR, rec_name))
+        except Exception as _e:
+            print(f"Warning: 録音チャンクファイル保存失敗: {_e}")
+        try:
             os.remove(tmp_path)
         except OSError:
             pass
@@ -1001,6 +1033,78 @@ def transcribe_chunk():
                 os.remove(wav_path)
         except OSError:
             pass
+
+
+# =========================
+# セッションデータ保存 API
+# =========================
+def _sanitize_session_id(sid: str) -> str:
+    return re.sub(r'[^\w\-]', '_', sid, flags=re.UNICODE)[:80]
+
+
+@app.route("/api/save_session", methods=["POST"])
+def save_session():
+    data = request.get_json()
+    if not data or "session_id" not in data:
+        return jsonify({"ok": False, "error": "session_id required"}), 400
+
+    session_id = _sanitize_session_id(str(data["session_id"]))
+    if not session_id:
+        return jsonify({"ok": False, "error": "invalid session_id"}), 400
+
+    data["session_id"] = session_id
+    data["saved_at"] = datetime.now().isoformat()
+
+    filepath = os.path.join(SESSIONS_DIR, f"{session_id}.json")
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return jsonify({"ok": True, "session_id": session_id})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/get_session/<session_id>", methods=["GET"])
+def get_session(session_id):
+    session_id = _sanitize_session_id(session_id)
+    filepath = os.path.join(SESSIONS_DIR, f"{session_id}.json")
+    if not os.path.exists(filepath):
+        return jsonify({"ok": False, "error": "session not found"}), 404
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return jsonify({"ok": True, "session": data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/list_sessions", methods=["GET"])
+def list_sessions():
+    try:
+        sessions = []
+        for fname in sorted(os.listdir(SESSIONS_DIR), reverse=True):
+            if not fname.endswith(".json"):
+                continue
+            fpath = os.path.join(SESSIONS_DIR, fname)
+            try:
+                with open(fpath, "r", encoding="utf-8") as f:
+                    d = json.load(f)
+                sessions.append({
+                    "session_id":    d.get("session_id", fname[:-5]),
+                    "group_number":  d.get("group_number", ""),
+                    "title":         d.get("title", ""),
+                    "phase":         d.get("phase", ""),
+                    "template":      d.get("template", ""),
+                    "note_count":    len(d.get("notes", [])),
+                    "speaker_summary": d.get("speakerSummary", []),
+                    "saved_at":      d.get("saved_at", ""),
+                    "created_at":    d.get("created_at", ""),
+                })
+            except Exception:
+                pass
+        return jsonify({"ok": True, "sessions": sessions})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # =========================
