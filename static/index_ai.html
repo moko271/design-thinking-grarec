@@ -1213,6 +1213,76 @@
 
     </div>
   </div>
+  <!-- 量子力学授業専用入り口 (/quantum) -->
+  <div id="quantumModal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width:440px;">
+      <div style="text-align:center; margin-bottom:18px;">
+        <span style="font-size:32px;">⚛️</span>
+        <h2 style="margin:8px 0 4px; font-size:18px; color:#1A3A5C;">
+          量子力学をわかりやすく伝えよう
+        </h2>
+        <p style="font-size:12px; color:#888; margin:0;">デザイン思考ワークシート</p>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="font-size:13px; color:#555; display:block; margin-bottom:6px;">
+          🔢 班番号を入力してください
+        </label>
+        <input type="number" id="quantum-group-input" min="1" max="99"
+          placeholder="班番号（数字）"
+          style="font-size:16px; padding:8px 12px; border:2px solid #ccc;
+                 border-radius:8px; width:100%; box-sizing:border-box;">
+        <div id="quantum-project-status"
+             style="font-size:12px; color:#888; margin-top:6px; min-height:18px;"></div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="font-size:13px; color:#555; display:block; margin-bottom:6px;">
+          👥 参加人数（話者数）
+        </label>
+        <select id="quantum-speakers-select"
+          style="font-size:14px; padding:6px 10px; border:1px solid #ccc;
+                 border-radius:8px; width:100%;">
+          <option value="2">2人</option>
+          <option value="3" selected>3人</option>
+          <option value="4">4人</option>
+          <option value="5">5人</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:22px;">
+        <label style="font-size:13px; color:#555; display:block; margin-bottom:8px;">
+          🤖 AI可視化支援モード（今回の話し合いの設定）
+        </label>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="quantum-ai-on"
+            style="flex:1; padding:10px; border:2px solid #4a90d9;
+                   border-radius:8px; background:#e8f0ff; color:#1A5CB5;
+                   font-size:13px; cursor:pointer; font-weight:bold; font-family:inherit;">
+            ✨ 支援あり
+          </button>
+          <button type="button" id="quantum-ai-off"
+            style="flex:1; padding:10px; border:2px solid #ccc;
+                   border-radius:8px; background:white; color:#666;
+                   font-size:13px; cursor:pointer; font-family:inherit;">
+            📝 支援なし
+          </button>
+        </div>
+        <p style="font-size:11px; color:#888; margin-top:6px; line-height:1.5;">
+          ※ この設定は前回の話し合いに関わらず毎回選び直せます
+        </p>
+      </div>
+
+      <button id="quantum-start-btn" type="button" disabled
+        style="width:100%; padding:12px; background:#2A6DB5; color:white;
+               border:none; border-radius:10px; font-size:15px; font-weight:bold;
+               cursor:pointer; font-family:inherit; opacity:0.45;
+               transition: opacity .2s;">
+        はじめる →
+      </button>
+    </div>
+  </div>
+
   <div id="setupModal" class="modal-overlay hidden">
     <div class="modal-card">
       <h2>はじめにセットアップ</h2>
@@ -2955,6 +3025,7 @@ function saveSession() {
 
   localStorage.setItem('graRec_session', JSON.stringify(session));
   saveToServer();
+  saveToProject(); // 量子モードのみ有効（それ以外はno-op）
 }
 
 // ==== サーバー保存（3秒デバウンス）====
@@ -3007,6 +3078,159 @@ function saveToServer() {
     }
   }, 3000);
 }
+
+// ==== 量子力学授業専用モード (/quantum) ====
+const QUANTUM_TITLE = '量子力学をわかりやすく伝えよう';
+window.quantumMode  = false;
+let _quantumAiSupport   = true;
+let _quantumProjectData = null;
+
+function isQuantumMode() {
+  return window.location.pathname === '/quantum' ||
+    new URLSearchParams(window.location.search).get('mode') === 'quantum';
+}
+
+// プロジェクト保存（3秒デバウンス）
+let _projectSaveTimer = null;
+function saveToProject() {
+  if (!window.quantumMode || !window.groupNumber) return;
+  clearTimeout(_projectSaveTimer);
+  _projectSaveTimer = setTimeout(async () => {
+    const notes = Array.from(document.querySelectorAll('#canvas .note')).map(n => ({
+      keyword:    n.dataset.keyword    || '',
+      quote:      n.dataset.quote      || '',
+      x:          n.style.left,
+      y:          n.style.top,
+      phase:      n.dataset.phase      || '',
+      emoji:      n.dataset.emoji      || '',
+      importance: n.dataset.importance || '',
+      speaker:    n.dataset.speaker    || '',
+      area:       n.dataset.area       || '',
+      type:       n.dataset.type       || '',
+      thought:    n.dataset.thought    || '',
+      who:        n.dataset.who        || '',
+      what:       n.dataset.what       || '',
+      when:       n.dataset.when       || '',
+      source:     n.dataset.source     || '',
+      addedAt:    n.dataset.addedAt    || ''
+    }));
+    try {
+      await fetch('/api/save_project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          group_number: window.groupNumber,
+          title:        QUANTUM_TITLE,
+          phase:        currentPhase    || 'saguru',
+          template:     currentTemplate || 'saguru',
+          notes,
+          session_id:   window.sessionId,
+          aiSupport:    window.aiSupport !== false,
+          created_at:   window.sessionCreatedAt || ''
+        })
+      });
+    } catch(e) {
+      console.warn('プロジェクト保存失敗:', e);
+    }
+  }, 3000);
+}
+
+// 量子モーダルの初期化
+(function setupQuantumModal() {
+  const onBtn    = document.getElementById('quantum-ai-on');
+  const offBtn   = document.getElementById('quantum-ai-off');
+  const startBtn = document.getElementById('quantum-start-btn');
+  const groupInput = document.getElementById('quantum-group-input');
+  const statusEl   = document.getElementById('quantum-project-status');
+  if (!onBtn) return;
+
+  function setQAiBtn(active) {
+    [onBtn, offBtn].forEach(b => {
+      const isActive = b === active;
+      b.style.borderColor = isActive ? '#4a90d9' : '#ccc';
+      b.style.background  = isActive ? '#e8f0ff' : 'white';
+      b.style.color       = isActive ? '#1A5CB5' : '#666';
+      b.style.fontWeight  = isActive ? 'bold'    : '';
+    });
+  }
+  setQAiBtn(onBtn); // デフォルト: 支援あり
+
+  onBtn.addEventListener('click',  () => { _quantumAiSupport = true;  setQAiBtn(onBtn); });
+  offBtn.addEventListener('click', () => { _quantumAiSupport = false; setQAiBtn(offBtn); });
+
+  let _groupCheckTimer = null;
+  groupInput.addEventListener('input', () => {
+    const val = groupInput.value.trim();
+    const ok  = val.length > 0;
+    startBtn.disabled = !ok;
+    startBtn.style.opacity = ok ? '1' : '0.45';
+    if (!ok) { statusEl.textContent = ''; _quantumProjectData = null; return; }
+
+    clearTimeout(_groupCheckTimer);
+    statusEl.textContent = '確認中…';
+    statusEl.style.color = '#888';
+    _groupCheckTimer = setTimeout(async () => {
+      try {
+        const res  = await fetch(`/api/get_project/${encodeURIComponent(val)}`);
+        const data = await res.json();
+        if (data.ok && data.found) {
+          _quantumProjectData = data.project;
+          const sess = data.project.sessions || [];
+          const last = sess[sess.length - 1];
+          const lastInfo = last
+            ? `${last.date} / ${phaseLabel(data.project.phase)}`
+            : '不明';
+          statusEl.textContent = `📋 班${val}のデータがあります（前回：${lastInfo}）`;
+          statusEl.style.color = '#2A6DB5';
+        } else {
+          _quantumProjectData = null;
+          statusEl.textContent = `✨ 班${val}の新しいワークシートを作ります`;
+          statusEl.style.color = '#27AE60';
+        }
+      } catch(e) {
+        statusEl.textContent = '';
+        _quantumProjectData = null;
+      }
+    }, 500);
+  });
+
+  startBtn.addEventListener('click', async () => {
+    const groupNum = groupInput.value.trim();
+    if (!groupNum) return;
+
+    window.groupNumber   = groupNum;
+    window.aiSupport     = _quantumAiSupport;
+    window.numSpeakers   = parseInt(
+      document.getElementById('quantum-speakers-select').value) || 3;
+    updateNumSpeakersBar();
+
+    const now = new Date();
+    const ts  = now.getFullYear().toString()
+      + String(now.getMonth()+1).padStart(2,'0')
+      + String(now.getDate()).padStart(2,'0')
+      + '_' + String(now.getHours()).padStart(2,'0')
+      + String(now.getMinutes()).padStart(2,'0')
+      + String(now.getSeconds()).padStart(2,'0');
+    window.sessionId         = `班${groupNum}_${ts}`;
+    window.sessionCreatedAt  = now.toISOString();
+
+    document.getElementById('quantumModal').classList.add('hidden');
+    document.getElementById('topicInput').value = QUANTUM_TITLE;
+    window.quantumMode = true;
+
+    if (_quantumProjectData) {
+      // プロジェクトデータを復元（AI支援設定は今回選んだものを使用）
+      _quantumProjectData.aiSupport = _quantumAiSupport;
+      restoreSession(_quantumProjectData);
+    } else {
+      // 新規: さぐるフェーズから開始、フェーズ選択ダイアログへ
+      currentTemplate = 'saguru';
+      applyAiSupportMode();
+      showSetupModal();
+    }
+    saveSession();
+  });
+})();
 
 function restoreSession(data) {
   _savingSession = true;
@@ -3061,6 +3285,14 @@ window.addEventListener('load', async () => {
   const onboarding = document.getElementById('onboardingModal');
   const setup = document.getElementById('setupModal');
   if (setup) setup.classList.add('hidden');
+
+  // 量子力学授業専用モード: 常にquantumModalを表示（AI支援を毎回選び直す）
+  if (isQuantumMode()) {
+    if (onboarding) onboarding.classList.add('hidden');
+    document.getElementById('quantumModal').classList.remove('hidden');
+    setRecordingControlsEnabled(false);
+    return;
+  }
 
   function showOnboarding() {
     if (onboarding) onboarding.classList.remove('hidden');

@@ -111,6 +111,27 @@
     </thead>
     <tbody id="tbody"></tbody>
   </table>
+
+  <!-- 班別プロジェクト履歴（/quantum 授業用） -->
+  <h2 style="margin-top:32px;">
+    ⚛️ 班別プロジェクト（量子力学授業）
+    <button class="reload-btn" onclick="loadProjects()">↺ 更新</button>
+  </h2>
+  <div id="proj-status">読み込み中…</div>
+  <table id="proj-tbl" style="display:none">
+    <thead>
+      <tr>
+        <th style="width:16px;"></th>
+        <th>班</th>
+        <th>最終フェーズ</th>
+        <th>カード数</th>
+        <th>話し合い回数</th>
+        <th>最終更新</th>
+        <th>振り返り</th>
+      </tr>
+    </thead>
+    <tbody id="proj-tbody"></tbody>
+  </table>
 </main>
 <script>
 const SPEAKER_COLORS = [
@@ -323,6 +344,89 @@ async function deleteSession(btn, event) {
 }
 
 loadSessions();
+
+// ===== 班別プロジェクト履歴 =====
+async function loadProjects() {
+  document.getElementById('proj-status').textContent = '読み込み中…';
+  document.getElementById('proj-tbl').style.display = 'none';
+  try {
+    const res  = await fetch('/api/list_projects');
+    if (res.status === 401) {
+      document.getElementById('proj-status').textContent = '認証エラー。ページをリロードしてください。';
+      return;
+    }
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    const tbody = document.getElementById('proj-tbody');
+    tbody.innerHTML = '';
+
+    if (data.projects.length === 0) {
+      document.getElementById('proj-status').textContent =
+        'プロジェクトデータはまだありません（/quantum からアクセスすると作成されます）。';
+      return;
+    }
+
+    data.projects.forEach((p, idx) => {
+      const detailId = `proj-detail-${idx}`;
+      const iconId   = `proj-icon-${idx}`;
+      const sessions = p.sessions || [];
+
+      const tr = document.createElement('tr');
+      tr.className = 'data-row';
+      tr.innerHTML = `
+        <td><span class="expand-icon" id="${iconId}">▶</span></td>
+        <td><span class="badge badge-group">班${esc(p.group_number)}</span></td>
+        <td><span class="badge badge-phase">${phaseLabel(p.phase)}</span></td>
+        <td style="text-align:center;">${p.note_count}</td>
+        <td style="text-align:center;">${sessions.length} 回</td>
+        <td style="white-space:nowrap;">${fmtDate(p.updated_at)}</td>
+        <td>
+          <a href="/review?session=${encodeURIComponent(sessions.length ? sessions[sessions.length-1].session_id : '')}"
+             target="_blank">最終回を見る</a>
+        </td>`;
+      tbody.appendChild(tr);
+
+      // セッション履歴展開行
+      const sessionRows = sessions.slice().reverse().map(s => `
+        <div class="mini-bar-row" style="padding:4px 0; border-bottom:1px solid #eef0f4;">
+          <span class="mini-bar-label" style="min-width:80px;">${s.date || '—'}</span>
+          <span class="badge badge-phase" style="margin:0 8px;">${phaseLabel(s.phase_reached)}</span>
+          <span style="font-size:11px;">${s.ai_support ? '✨ 支援あり' : '📝 支援なし'}</span>
+          <span style="font-size:11px; color:#888; margin-left:8px;">${s.card_count}枚</span>
+          <a href="/review?session=${encodeURIComponent(s.session_id)}"
+             style="margin-left:auto; font-size:11px;" target="_blank">振り返り</a>
+        </div>`).join('');
+
+      const detailTr = document.createElement('tr');
+      detailTr.className = 'detail-row';
+      detailTr.innerHTML = `
+        <td colspan="7">
+          <div class="detail-panel" id="${detailId}">
+            <div class="detail-block" style="grid-column:1/-1;">
+              <h4>📅 話し合い履歴（新しい順）</h4>
+              ${sessionRows || '<span style="color:#aaa;font-size:11px;">記録なし</span>'}
+            </div>
+          </div>
+        </td>`;
+      tbody.appendChild(detailTr);
+
+      tr.addEventListener('click', () => {
+        const panel = document.getElementById(detailId);
+        const icon  = document.getElementById(iconId);
+        const isOpen = panel.classList.toggle('open');
+        icon.classList.toggle('open', isOpen);
+      });
+    });
+
+    document.getElementById('proj-status').textContent = `${data.projects.length} 班のプロジェクト`;
+    document.getElementById('proj-tbl').style.display = 'table';
+  } catch(e) {
+    document.getElementById('proj-status').textContent = 'エラー: ' + e.message;
+  }
+}
+
+loadProjects();
 </script>
 </body>
 </html>

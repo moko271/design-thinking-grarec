@@ -34,8 +34,9 @@ if not OPENAI_API_KEY:
 DATA_DIR       = os.getenv("DATA_DIR", "data")
 SESSIONS_DIR   = os.getenv("SESSIONS_DIR",   os.path.join(DATA_DIR, "sessions"))
 RECORDINGS_DIR = os.getenv("RECORDINGS_DIR", os.path.join(DATA_DIR, "recordings"))
+PROJECTS_DIR   = os.getenv("PROJECTS_DIR",   os.path.join(DATA_DIR, "projects"))
 
-for _d in (SESSIONS_DIR, RECORDINGS_DIR):
+for _d in (SESSIONS_DIR, RECORDINGS_DIR, PROJECTS_DIR):
     try:
         os.makedirs(_d, exist_ok=True)
     except OSError as _e:
@@ -202,6 +203,11 @@ def review():
 @require_admin
 def admin():
     return send_from_directory("static", "admin.html")
+
+
+@app.route("/quantum")
+def quantum():
+    return send_from_directory("static", "index_ai.html")
 
 
 # =========================
@@ -1105,6 +1111,117 @@ def get_session(session_id):
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
         return jsonify({"ok": True, "session": data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# =========================
+# 班別プロジェクト API
+# =========================
+def _sanitize_group_number(gn: str) -> str:
+    """班番号を安全なファイル名用文字列に変換する。"""
+    return re.sub(r'[^\w]', '_', str(gn))[:20]
+
+
+@app.route("/api/get_project/<group_number>", methods=["GET"])
+def get_project(group_number):
+    gn = _sanitize_group_number(group_number)
+    filepath = os.path.join(PROJECTS_DIR, f"group_{gn}.json")
+    if not os.path.exists(filepath):
+        return jsonify({"ok": True, "found": False})
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return jsonify({"ok": True, "found": True, "project": data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/save_project", methods=["POST"])
+def save_project():
+    data = request.get_json()
+    if not data or "group_number" not in data:
+        return jsonify({"ok": False, "error": "group_number required"}), 400
+
+    gn = _sanitize_group_number(data["group_number"])
+    if not gn:
+        return jsonify({"ok": False, "error": "invalid group_number"}), 400
+
+    filepath = os.path.join(PROJECTS_DIR, f"group_{gn}.json")
+
+    # 既存プロジェクトを読み込むか新規作成
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                project = json.load(f)
+        except Exception:
+            project = {"group_number": gn, "sessions": []}
+    else:
+        project = {"group_number": gn, "sessions": []}
+
+    # プロジェクト状態を更新（ノートとフェーズ）
+    project["group_number"] = gn
+    project["title"]       = data.get("title",    project.get("title", ""))
+    project["phase"]       = data.get("phase",    project.get("phase", "saguru"))
+    project["template"]    = data.get("template", project.get("template", "saguru"))
+    project["notes"]       = data.get("notes",    project.get("notes", []))
+    project["updated_at"]  = datetime.now().isoformat()
+
+    # セッションログに追記（session_id単位で1エントリ）
+    session_id = data.get("session_id", "")
+    today = datetime.now().strftime("%Y-%m-%d")
+    sessions = project.get("sessions", [])
+
+    existing = next((s for s in sessions if s.get("session_id") == session_id), None)
+    if existing:
+        existing["phase_reached"] = data.get("phase", existing.get("phase_reached", ""))
+        existing["card_count"]    = len(data.get("notes", []))
+        existing["ai_support"]    = data.get("aiSupport", existing.get("ai_support", True))
+        existing["saved_at"]      = datetime.now().isoformat()
+    else:
+        sessions.append({
+            "date":          today,
+            "session_id":    session_id,
+            "phase_reached": data.get("phase", "saguru"),
+            "ai_support":    data.get("aiSupport", True),
+            "card_count":    len(data.get("notes", [])),
+            "started_at":    data.get("created_at", datetime.now().isoformat()),
+            "saved_at":      datetime.now().isoformat(),
+        })
+
+    project["sessions"] = sessions
+
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(project, f, ensure_ascii=False, indent=2)
+        return jsonify({"ok": True, "group_number": gn})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/list_projects", methods=["GET"])
+@require_admin
+def list_projects():
+    try:
+        projects = []
+        for fname in sorted(os.listdir(PROJECTS_DIR)):
+            if not fname.endswith(".json") or not fname.startswith("group_"):
+                continue
+            fpath = os.path.join(PROJECTS_DIR, fname)
+            try:
+                with open(fpath, "r", encoding="utf-8") as f:
+                    d = json.load(f)
+                projects.append({
+                    "group_number": d.get("group_number", ""),
+                    "title":        d.get("title", ""),
+                    "phase":        d.get("phase", ""),
+                    "note_count":   len(d.get("notes", [])),
+                    "sessions":     d.get("sessions", []),
+                    "updated_at":   d.get("updated_at", ""),
+                })
+            except Exception:
+                pass
+        return jsonify({"ok": True, "projects": projects})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
