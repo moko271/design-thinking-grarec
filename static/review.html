@@ -39,14 +39,20 @@
 
     main { max-width: 960px; margin: 0 auto; padding: 24px 20px 60px; }
 
-    /* メタ情報 */
-    #review-meta {
+    .card-section {
       background: white;
       border-radius: 10px;
       padding: 16px 20px;
       margin-bottom: 20px;
       box-shadow: 0 1px 6px rgba(0,0,0,0.08);
     }
+    .card-section h3 {
+      font-size: 14px;
+      color: #555;
+      margin-bottom: 12px;
+    }
+
+    /* メタ情報 */
     #review-meta h2 {
       font-size: 20px;
       color: #1A3A5C;
@@ -58,21 +64,19 @@
       display: flex;
       gap: 16px;
       margin-top: 6px;
+      flex-wrap: wrap;
     }
+    .meta-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .meta-badge-ai-on  { background: #e8f0ff; color: #1A5CB5; }
+    .meta-badge-ai-off { background: #f5f5f5; color: #888; }
 
     /* 発言量サマリー */
-    #speaker-section {
-      background: white;
-      border-radius: 10px;
-      padding: 16px 20px;
-      margin-bottom: 20px;
-      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
-    }
-    #speaker-section h3 {
-      font-size: 14px;
-      color: #555;
-      margin-bottom: 12px;
-    }
     .speaker-bar-row { margin: 8px 0; }
     .speaker-bar-label {
       font-size: 12px;
@@ -89,10 +93,34 @@
       overflow: hidden;
     }
     .speaker-bar-fill {
-      background: #2A6DB5;
       border-radius: 4px;
       height: 18px;
       transition: width 0.4s;
+    }
+
+    /* 話者名入力 */
+    .speaker-label-row {
+      display: flex; align-items: center; gap: 10px; margin: 8px 0;
+    }
+    .speaker-label-row label {
+      font-size: 13px; color: #555; min-width: 110px; white-space: nowrap;
+    }
+    .speaker-label-row input {
+      flex: 1; padding: 6px 10px; font-size: 13px;
+      border: 1px solid #ccc; border-radius: 6px;
+      font-family: 'Noto Sans JP', sans-serif;
+    }
+
+    /* インサイトボックス */
+    .insight-box {
+      background: #EEF4FF;
+      border-left: 4px solid #2A6DB5;
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: #1A3A5C;
+      line-height: 1.7;
+      margin-top: 12px;
     }
 
     /* カードセクション */
@@ -145,22 +173,6 @@
       margin-top: 2px;
     }
 
-    /* キーワードカード一覧 */
-    #cards-section {
-      background: white;
-      border-radius: 10px;
-      padding: 16px 20px;
-      margin-top: 24px;
-      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
-    }
-    #cards-section h3 {
-      font-size: 14px;
-      color: #555;
-      margin-bottom: 12px;
-      border-left: none;
-      padding-left: 0;
-    }
-
     /* データなし */
     #no-data {
       display: none;
@@ -202,25 +214,45 @@
   </div>
 
   <!-- メタ情報 -->
-  <div id="review-meta" style="display:none;">
+  <div id="review-meta" class="card-section" style="display:none;">
     <h2 id="review-title"></h2>
     <div class="meta-sub">
       <span id="review-date"></span>
       <span id="review-template"></span>
+      <span id="review-group"></span>
+      <span id="review-ai-badge"></span>
     </div>
   </div>
 
   <!-- 発言量サマリー -->
-  <div id="speaker-section" style="display:none;">
+  <div id="speaker-section" class="card-section" style="display:none;">
     <h3>🎤 発言量サマリー</h3>
     <div id="speaker-bars"></div>
+    <div id="speaker-insight" class="insight-box" style="display:none;"></div>
+  </div>
+
+  <!-- 話者名入力 -->
+  <div id="speaker-labels-section" class="card-section" style="display:none;">
+    <h3>✏️ 話者名を入力する</h3>
+    <div id="speaker-label-inputs"></div>
+    <div style="margin-top:12px; display:flex; align-items:center; gap:10px;">
+      <button id="save-labels-btn" class="btn btn-primary" style="font-size:13px;">保存する</button>
+      <span id="save-labels-status" style="font-size:12px; color:#888;"></span>
+    </div>
+  </div>
+
+  <!-- DA分類分布 -->
+  <div id="da-section" class="card-section" style="display:none;">
+    <h3>📊 発言タイプの分布</h3>
+    <div id="da-bars"></div>
+    <div id="da-insight" class="insight-box" style="margin-top:12px;"></div>
   </div>
 
   <!-- ノートカード（フェーズ別） -->
   <div id="review-cards"></div>
 
   <!-- キーワードカード一覧 -->
-  <div id="cards-section" style="display:none;">
+  <div id="cards-section" class="card-section" style="display:none; margin-top:24px;">
     <h3>📌 キーワードカード一覧</h3>
     <div id="cards-list" class="cards-row"></div>
   </div>
@@ -245,73 +277,231 @@ const TEMPLATE_LABELS = {
 const IMP_COLOR = { high: '#E85D5D', medium: '#F0A030', low: '#CCCCCC' };
 const IMP_ORDER = { high: 0, medium: 1, low: 2 };
 
+const SPEAKER_COLORS = [
+  '#4A90D9','#E85D5D','#27AE60','#F0A030',
+  '#9B59B6','#16A085','#E67E22','#2C3E50'
+];
+
+const DA_LABELS = {
+  fact: '事実', opinion: '意見', question: '問い',
+  idea: 'アイデア', reaction: '反応', instruction: '指示'
+};
+const DA_COLORS = {
+  fact: '#4A90D9', opinion: '#27AE60', question: '#F0A030',
+  idea: '#E85D5D', reaction: '#9B59B6', instruction: '#16A085'
+};
+
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// セッション全体を保持
+let currentSession = null;
+let currentLabels  = {};
+
+// ====== 発言量バー ======
 function renderSpeakerBar(summary, labels) {
   const container = document.getElementById('speaker-bars');
-  summary.forEach(s => {
-    const name = (labels && labels[s.speaker]) || s.speaker;
+  summary.forEach((s, i) => {
+    const name  = (labels && labels[s.speaker]) || s.speaker;
+    const color = SPEAKER_COLORS[i % SPEAKER_COLORS.length];
     const row = document.createElement('div');
     row.className = 'speaker-bar-row';
     row.innerHTML = `
       <div class="speaker-bar-label">
-        <span>${name}</span>
+        <span class="sb-name" data-speaker-id="${escHtml(s.speaker)}"
+              style="color:${color}; font-weight:bold;">${escHtml(name)}</span>
         <span>${s.percentage}% ／ ${s.count}回発言</span>
       </div>
       <div class="speaker-bar-track">
-        <div class="speaker-bar-fill" style="width:${s.percentage}%"></div>
+        <div class="speaker-bar-fill" style="width:${s.percentage}%; background:${color};"></div>
       </div>`;
     container.appendChild(row);
   });
   document.getElementById('speaker-section').style.display = '';
 }
 
+// ====== 話者インサイト ======
+function renderSpeakerInsight(summary, labels) {
+  if (!summary || summary.length === 0) return;
+  const max  = summary.reduce((a, b) => a.percentage > b.percentage ? a : b);
+  const name = (labels && labels[max.speaker]) || max.speaker;
+  let msg;
+  if (max.percentage > 40) {
+    msg = `${name}さんの発言が全体の${max.percentage}%を占めていました。話し合いの中で、これに気づいていましたか？`;
+  } else if (max.percentage >= 35) {
+    msg = `最も多く発言したのは${name}さん（${max.percentage}%）でした。他の人がもっと話せる場面はありましたか？`;
+  } else {
+    msg = `発言量は比較的均等でした（最大${max.percentage}%）。全員が話しやすい雰囲気だったと言えそうですね。`;
+  }
+  const el = document.getElementById('speaker-insight');
+  el.textContent = msg;
+  el.style.display = '';
+}
+
+// ====== 話者名入力フォーム ======
+function renderSpeakerLabelInputs(summary, labels) {
+  const container = document.getElementById('speaker-label-inputs');
+  container.innerHTML = '';
+  summary.forEach((s, i) => {
+    const color = SPEAKER_COLORS[i % SPEAKER_COLORS.length];
+    const row = document.createElement('div');
+    row.className = 'speaker-label-row';
+    const lbl = document.createElement('label');
+    lbl.style.color = color;
+    lbl.style.fontWeight = 'bold';
+    lbl.textContent = s.speaker + '：';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.placeholder = '名前を入力（例：田中さん）';
+    inp.value = labels[s.speaker] || '';
+    inp.dataset.speakerId = s.speaker;
+    inp.addEventListener('input', () => {
+      const val = inp.value.trim() || s.speaker;
+      currentLabels[s.speaker] = val;
+      // バッジをリアルタイム更新
+      document.querySelectorAll(`.speaker-badge[data-speaker-id="${s.speaker}"]`).forEach(b => {
+        b.textContent = '🎤 ' + val;
+      });
+      // 発言量バーのラベルも更新
+      document.querySelectorAll(`.sb-name[data-speaker-id="${s.speaker}"]`).forEach(el => {
+        el.textContent = val;
+      });
+    });
+    row.appendChild(lbl);
+    row.appendChild(inp);
+    container.appendChild(row);
+  });
+  document.getElementById('speaker-labels-section').style.display = '';
+}
+
+// ====== 話者ラベル保存 ======
+async function saveSpeakerLabels() {
+  if (!currentSession) return;
+  const statusEl = document.getElementById('save-labels-status');
+  // 空欄のものはスキップ（スピーカーIDのまま維持）
+  document.querySelectorAll('#speaker-label-inputs input[data-speaker-id]').forEach(inp => {
+    const val = inp.value.trim();
+    if (val) currentLabels[inp.dataset.speakerId] = val;
+  });
+  currentSession.speakerLabels = currentLabels;
+  // localStorage に保存
+  localStorage.setItem('graRec_session', JSON.stringify(currentSession));
+  // サーバーに保存
+  if (currentSession.session_id) {
+    try {
+      await fetch('/api/save_session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(currentSession)
+      });
+      statusEl.textContent = '✓ 保存しました';
+    } catch(e) {
+      statusEl.textContent = '⚠️ サーバー保存に失敗しました（ブラウザには保存済み）';
+    }
+  } else {
+    statusEl.textContent = '✓ 保存しました（ブラウザのみ）';
+  }
+  setTimeout(() => { statusEl.textContent = ''; }, 2500);
+}
+
+// ====== DA分類分布 ======
+function renderDaDistribution(notes) {
+  const counts = {};
+  notes.forEach(n => {
+    if (n.type) counts[n.type] = (counts[n.type] || 0) + 1;
+  });
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  if (total === 0) return;
+
+  const barsEl = document.getElementById('da-bars');
+  barsEl.innerHTML = '';
+  Object.entries(DA_LABELS).forEach(([type, label]) => {
+    const count = counts[type] || 0;
+    const pct   = Math.round(count / total * 100);
+    const row   = document.createElement('div');
+    row.className = 'speaker-bar-row';
+    row.innerHTML = `
+      <div class="speaker-bar-label">
+        <span style="color:${DA_COLORS[type] || '#555'}; font-weight:bold;">${label}（${type}）</span>
+        <span>${pct}% ／ ${count}件</span>
+      </div>
+      <div class="speaker-bar-track">
+        <div class="speaker-bar-fill"
+             style="width:${pct}%; background:${DA_COLORS[type] || '#4A90D9'};"></div>
+      </div>`;
+    barsEl.appendChild(row);
+  });
+
+  const ideaPct = Math.round((counts.idea    || 0) / total * 100);
+  const factPct = Math.round((counts.fact    || 0) / total * 100);
+  const qPct    = Math.round((counts.question|| 0) / total * 100);
+  let insight = `事実（fact）の発言が全体の${factPct}%、アイデア（idea）は${ideaPct}%でした。`;
+  if (ideaPct < 15 && factPct > 40) {
+    insight += ' 事実の確認が多く、アイデアが少なめでした。次の話し合いでは「もしこうだったら？」から発散を試みてはどうでしょう。';
+  } else if (qPct > 30) {
+    insight += ` 問いかけ（question）が全体の${qPct}%と多めでした。疑問が解決される方向に話し合いを進めることができましたか？`;
+  } else if (ideaPct > 35) {
+    insight += ` アイデアが豊富でした！それぞれのアイデアの根拠や実現可能性も整理できましたか？`;
+  } else {
+    insight += ' 次の話し合いではどんなことをさらに深めてみたいですか？';
+  }
+  document.getElementById('da-insight').textContent = insight;
+  document.getElementById('da-section').style.display = '';
+}
+
+// ====== カード生成 ======
 function makeCard(data, labels) {
-  const el = document.createElement('div');
+  const el  = document.createElement('div');
   el.className = 'review-card';
   const imp = data.importance || 'medium';
   el.style.borderLeft = `4px solid ${IMP_COLOR[imp] || IMP_COLOR.medium}`;
 
-  const speakerLabel = data.speaker
+  const speakerName = data.speaker
     ? ((labels && labels[data.speaker]) || data.speaker)
     : '';
 
   el.innerHTML = `
-    <div class="card-keyword">${data.keyword || ''}</div>
-    <div class="card-quote">${data.quote ? '「' + data.quote + '」' : ''}</div>
-    ${speakerLabel ? `<span class="speaker-badge">🎤 ${speakerLabel}</span>` : ''}
+    <div class="card-keyword">${escHtml(data.keyword || '')}</div>
+    <div class="card-quote">${data.quote ? '「' + escHtml(data.quote) + '」' : ''}</div>
+    ${speakerName
+      ? `<span class="speaker-badge" data-speaker-id="${escHtml(data.speaker)}">🎤 ${escHtml(speakerName)}</span>`
+      : ''}
   `;
   return el;
 }
 
-window.addEventListener('load', () => {
-  const raw = localStorage.getItem('graRec_session');
-  if (!raw) {
-    document.getElementById('no-data').style.display = 'block';
-    return;
-  }
-
-  let session;
-  try { session = JSON.parse(raw); }
-  catch (e) {
-    document.getElementById('no-data').style.display = 'block';
-    return;
-  }
-
-  const labels = session.speakerLabels || {};
+// ====== セッション読み込みと描画 ======
+async function loadAndRender(session) {
+  currentSession = session;
+  currentLabels  = { ...(session.speakerLabels || {}) };
 
   // メタ情報
   document.getElementById('review-title').textContent =
     session.title || '無題の話し合い';
   document.getElementById('review-date').textContent =
-    session.savedAt
-      ? new Date(session.savedAt).toLocaleString('ja-JP')
-      : '';
+    session.savedAt ? new Date(session.savedAt).toLocaleString('ja-JP') : '';
   document.getElementById('review-template').textContent =
     TEMPLATE_LABELS[session.template] || session.template || '';
+  if (session.group_number) {
+    document.getElementById('review-group').textContent =
+      `班${session.group_number}`;
+  }
+  const aiBadge = document.getElementById('review-ai-badge');
+  if (session.aiSupport === false) {
+    aiBadge.innerHTML = '<span class="meta-badge meta-badge-ai-off">支援なし</span>';
+  } else {
+    aiBadge.innerHTML = '<span class="meta-badge meta-badge-ai-on">✨ AI支援あり</span>';
+  }
   document.getElementById('review-meta').style.display = '';
 
   // 発言量サマリー
   if (session.speakerSummary && session.speakerSummary.length > 0) {
-    renderSpeakerBar(session.speakerSummary, labels);
+    renderSpeakerBar(session.speakerSummary, currentLabels);
+    renderSpeakerInsight(session.speakerSummary, currentLabels);
+    renderSpeakerLabelInputs(session.speakerSummary, currentLabels);
   }
 
   // ノートをフェーズ別に表示
@@ -326,30 +516,31 @@ window.addEventListener('load', () => {
 
     const container = document.getElementById('review-cards');
     const phaseLabel = {
-      saguru: '①さぐる', kizuku: '②きづく', hirameku: '③ひらめく',
-      tsukuru: '④つくる', tamesu: '⑤ためす',
-      minutes: '議事録', interview: '面談記録', custom: 'カスタム',
+      saguru:'①さぐる', kizuku:'②きづく', hirameku:'③ひらめく',
+      tsukuru:'④つくる', tamesu:'⑤ためす',
+      minutes:'議事録', interview:'面談記録', custom:'カスタム',
     };
 
     Object.entries(byPhase).forEach(([phase, cards]) => {
       cards.sort((a, b) =>
         (IMP_ORDER[a.importance] ?? 1) - (IMP_ORDER[b.importance] ?? 1)
       );
-
       const section = document.createElement('div');
       const h3 = document.createElement('h3');
       h3.textContent = phaseLabel[phase] || phase;
       section.appendChild(h3);
-
       const row = document.createElement('div');
       row.className = 'cards-row';
-      cards.forEach(card => row.appendChild(makeCard(card, labels)));
+      cards.forEach(card => row.appendChild(makeCard(card, currentLabels)));
       section.appendChild(row);
       container.appendChild(section);
     });
+
+    // DA分類分布
+    renderDaDistribution(notes);
   }
 
-  // キーワードカード一覧
+  // キーワードカード一覧（旧フォーマット）
   const cards = session.cards || [];
   if (cards.length > 0) {
     const list = document.getElementById('cards-list');
@@ -358,10 +549,47 @@ window.addEventListener('load', () => {
       .sort((a, b) =>
         (IMP_ORDER[a.importance] ?? 1) - (IMP_ORDER[b.importance] ?? 1)
       )
-      .forEach(c => list.appendChild(makeCard(c, labels)));
+      .forEach(c => list.appendChild(makeCard(c, currentLabels)));
     document.getElementById('cards-section').style.display = '';
   }
+}
+
+// ====== ページロード ======
+window.addEventListener('load', async () => {
+  // URLパラメータ ?session=xxx でサーバーから読み込む
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlSession = urlParams.get('session');
+  if (urlSession) {
+    try {
+      const res = await fetch(`/api/get_session/${encodeURIComponent(urlSession)}`);
+      const data = await res.json();
+      if (data.ok && data.session) {
+        await loadAndRender(data.session);
+        return;
+      }
+    } catch(e) {
+      console.warn('サーバーからの読み込みに失敗しました:', e);
+    }
+  }
+
+  // localStorage から読み込む
+  const raw = localStorage.getItem('graRec_session');
+  if (!raw) {
+    document.getElementById('no-data').style.display = 'block';
+    return;
+  }
+  let session;
+  try { session = JSON.parse(raw); }
+  catch (e) {
+    document.getElementById('no-data').style.display = 'block';
+    return;
+  }
+  await loadAndRender(session);
 });
+
+// 話者ラベル保存ボタン
+document.getElementById('save-labels-btn')
+  .addEventListener('click', saveSpeakerLabels);
 
 // PNG保存
 document.getElementById('savePngBtn').addEventListener('click', async () => {

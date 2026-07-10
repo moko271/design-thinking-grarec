@@ -9,9 +9,10 @@ import subprocess
 import traceback
 from datetime import datetime
 from collections import defaultdict
+from functools import wraps
 from pydub import AudioSegment
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, Response
 from dotenv import load_dotenv
 from openai import OpenAI
 from pyannote.audio import Pipeline
@@ -39,6 +40,35 @@ for _d in (SESSIONS_DIR, RECORDINGS_DIR):
         os.makedirs(_d, exist_ok=True)
     except OSError as _e:
         print(f"Warning: ディレクトリ作成失敗 {_d}: {_e}")
+
+# =========================
+# 管理画面 Basic 認証
+# =========================
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+
+def require_admin(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        # 環境変数未設定時は認証をスキップ（開発環境用）
+        if not ADMIN_PASSWORD:
+            print("Warning: ADMIN_PASSWORD 未設定。管理画面は認証なしで公開されています。")
+            return f(*args, **kwargs)
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Basic "):
+            try:
+                creds = base64.b64decode(auth[6:]).decode("utf-8")
+                user, pw = creds.split(":", 1)
+                if user == ADMIN_USERNAME and pw == ADMIN_PASSWORD:
+                    return f(*args, **kwargs)
+            except Exception:
+                pass
+        return Response(
+            "Authentication required",
+            401,
+            {"WWW-Authenticate": 'Basic realm="GraRec Admin"'},
+        )
+    return decorated
 
 # =========================
 # pyannote パイプラインキャッシュ
@@ -169,6 +199,7 @@ def review():
 
 
 @app.route("/admin")
+@require_admin
 def admin():
     return send_from_directory("static", "admin.html")
 
@@ -1078,7 +1109,64 @@ def get_session(session_id):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+def _compute_metrics(d: dict) -> dict:
+    """セッションデータから活用度指標を計算する。"""
+    notes = d.get("notes", [])
+
+    # エリア分布
+    area_dist: dict = defaultdict(int)
+    for n in notes:
+        area = n.get("area") or "unplaced"
+        area_dist[area] += 1
+
+    # 手動 / AI 別カード数
+    manual_count  = sum(1 for n in notes if n.get("source") == "manual")
+    ai_count      = sum(1 for n in notes if n.get("source") == "ai")
+    unknown_count = sum(1 for n in notes if not n.get("source"))
+
+    # セッション時間推定（分）
+    duration_min = None
+    created_at = d.get("created_at") or ""
+    saved_at   = d.get("saved_at") or ""
+    if created_at and saved_at:
+        try:
+            t0 = datetime.fromisoformat(created_at)
+            t1 = datetime.fromisoformat(saved_at)
+            diff = (t1 - t0).total_seconds() / 60
+            if diff >= 0:
+                duration_min = round(diff, 1)
+        except Exception:
+            pass
+
+    # カード追加タイムライン（5分刻みバケット）
+    timeline: dict = defaultdict(int)
+    for n in notes:
+        ts = n.get("addedAt") or n.get("added_at") or ""
+        if not ts:
+            continue
+        try:
+            t = datetime.fromisoformat(ts)
+            bucket_min = (t.hour * 60 + t.minute) // 5 * 5
+            bucket = f"{bucket_min // 60:02d}:{bucket_min % 60:02d}"
+            timeline[bucket] += 1
+        except Exception:
+            pass
+
+    return {
+        "area_distribution": dict(area_dist),
+        "manual_count":      manual_count,
+        "ai_count":          ai_count,
+        "unknown_count":     unknown_count,
+        "duration_min":      duration_min,
+        "card_timeline":     [
+            {"bucket": k, "count": v}
+            for k, v in sorted(timeline.items())
+        ],
+    }
+
+
 @app.route("/api/list_sessions", methods=["GET"])
+@require_admin
 def list_sessions():
     try:
         sessions = []
@@ -1089,16 +1177,19 @@ def list_sessions():
             try:
                 with open(fpath, "r", encoding="utf-8") as f:
                     d = json.load(f)
+                metrics = _compute_metrics(d)
                 sessions.append({
-                    "session_id":    d.get("session_id", fname[:-5]),
-                    "group_number":  d.get("group_number", ""),
-                    "title":         d.get("title", ""),
-                    "phase":         d.get("phase", ""),
-                    "template":      d.get("template", ""),
-                    "note_count":    len(d.get("notes", [])),
+                    "session_id":      d.get("session_id", fname[:-5]),
+                    "group_number":    d.get("group_number", ""),
+                    "title":           d.get("title", ""),
+                    "phase":           d.get("phase", ""),
+                    "template":        d.get("template", ""),
+                    "ai_support":      d.get("aiSupport", True),
+                    "note_count":      len(d.get("notes", [])),
                     "speaker_summary": d.get("speakerSummary", []),
-                    "saved_at":      d.get("saved_at", ""),
-                    "created_at":    d.get("created_at", ""),
+                    "saved_at":        d.get("saved_at", ""),
+                    "created_at":      d.get("created_at", ""),
+                    **metrics,
                 })
             except Exception:
                 pass

@@ -523,25 +523,25 @@
 
     .area-label {
       position: absolute;
-      top: -22px;
+      top: -24px;
       left: 0;
       white-space: nowrap;
       background: rgba(255,255,255,0.92);
-      padding: 2px 8px;
+      padding: 3px 10px;
       border-radius: 4px 4px 0 0;
       font-weight: bold;
-      font-size: 11px;
+      font-size: 14px;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 5px;
       z-index: 2;
       box-shadow: 0 -1px 3px rgba(0,0,0,0.06);
     }
     .area-label span.icon {
-      font-size: 12px;
+      font-size: 15px;
     }
     .area-hint {
-      font-size: 11px;
+      font-size: 12px;
       color: #555;
     }
 
@@ -1027,9 +1027,15 @@
 
       <!-- 画面1：職業 -->
       <div class="ob-screen" data-screen="0">
-        <h2 style="margin:0 0 6px;">
+        <h2 style="margin:0 0 10px;">
           はじめまして！
         </h2>
+        <p style="margin:0 0 14px; font-size:13px; color:#1A3A5C;
+                  background:#EEF4FF; padding:10px 14px;
+                  border-radius:8px; line-height:1.7; border-left:3px solid #4a90d9;">
+          このシステムは、話し合いの内容を自動で見える化することで、
+          自分たちだけでは気づけなかったことに気づく手助けをするものです。
+        </p>
         <p style="margin:0 0 16px;font-size:14px;
                   color:#555;">
           あなたの職業を教えてください。
@@ -1154,6 +1160,30 @@
             placeholder="班番号（数字）"
             style="font-size:14px; padding:6px 10px; border:1px solid #ccc;
                    border-radius:8px; width:100%; box-sizing:border-box;">
+        </div>
+        <div style="margin-top:14px;">
+          <label style="font-size:13px; color:#555; display:block; margin-bottom:8px;">
+            🤖 AI可視化支援モード
+          </label>
+          <div style="display:flex; gap:8px;">
+            <button type="button" id="ai-support-on"
+              style="flex:1; padding:8px 10px; border:2px solid #4a90d9;
+                     border-radius:8px; background:#e8f0ff; color:#1A5CB5;
+                     font-size:13px; cursor:pointer; font-weight:bold;
+                     font-family:inherit;">
+              ✨ 支援あり
+            </button>
+            <button type="button" id="ai-support-off"
+              style="flex:1; padding:8px 10px; border:2px solid #ccc;
+                     border-radius:8px; background:white; color:#666;
+                     font-size:13px; cursor:pointer; font-family:inherit;">
+              📝 支援なし
+            </button>
+          </div>
+          <p style="font-size:11px; color:#888; margin-top:6px; line-height:1.5;">
+            支援あり：AIによるキーワード抽出・自動配置が使えます<br>
+            支援なし：手動でカードを追加するのみになります
+          </p>
         </div>
         <button class="ob-next" id="ob-next-2"
                 type="button" disabled>はじめる →</button>
@@ -2041,7 +2071,7 @@ function setWorksheetLayout(phase) {
   const dtPhases = ['saguru','kizuku','hirameku','tsukuru','tamesu'];
   const autoLayoutSec = document.getElementById('autoLayoutSection');
   const autoModeParent = document.getElementById('autoModeToggle')?.closest('label')?.parentElement;
-  const showLayout = !dtPhases.includes(phase); // custom / minutes / interview も表示
+  const showLayout = !dtPhases.includes(phase) && window.aiSupport !== false;
   if (autoLayoutSec) autoLayoutSec.style.display = showLayout ? 'block' : 'none';
   if (autoModeParent) autoModeParent.style.display = showLayout ? 'flex' : 'none';
 }
@@ -2093,6 +2123,24 @@ function changePhase(newPhase) {
   saveSession();
 }
 
+function applyAiSupportMode() {
+  const supported = window.aiSupport !== false;
+  // AI抽出セクション
+  const aiSection = document.querySelector('#aiKeywordBtn')?.closest('.left-section');
+  if (aiSection) aiSection.style.display = supported ? '' : 'none';
+  // リアルタイム配置セクション
+  const realtimeSec = document.getElementById('realtimeSection');
+  if (realtimeSec) realtimeSec.style.display = supported ? '' : 'none';
+  // 自動配置・ヘッダートグルは setWorksheetLayout 経由で制御
+  // 現在のフェーズで再計算して上書き
+  const dtPhases = ['saguru','kizuku','hirameku','tsukuru','tamesu'];
+  const autoLayoutSec = document.getElementById('autoLayoutSection');
+  const autoModeParent = document.getElementById('autoModeToggle')?.closest('label')?.parentElement;
+  const showLayout = !dtPhases.includes(currentPhase) && supported;
+  if (autoLayoutSec) autoLayoutSec.style.display = showLayout ? 'block' : 'none';
+  if (autoModeParent) autoModeParent.style.display = showLayout ? 'flex' : 'none';
+}
+
 // フェーズごとに付箋を非表示／表示（未配置は常に表示）
 function updateNotesVisibility() {
   document.querySelectorAll(".note").forEach(note => {
@@ -2120,7 +2168,7 @@ document.getElementById('rawMemo')?.addEventListener('input', saveSession);
 addKeywordBtn.onclick = () => {
   const text = keywordInput.value.trim();
   if (!text) return;
-  addKeywordCard(text, getEmojiForKeyword(text), '', '', '', '', '', '', undefined, 'medium');
+  addKeywordCard(text, getEmojiForKeyword(text), '', '', '', '', '', '', undefined, 'medium', 'manual');
   keywordInput.value = "";
 };
 
@@ -2629,6 +2677,24 @@ setupStartBtn.addEventListener('click', finishSetup);
 
 // オンボーディングの状態
 const obState = { job: null, use: null, sheet: null };
+window._obAiSupport = true; // デフォルト：支援あり
+
+(function setupAiSupportToggle() {
+  const onBtn  = document.getElementById('ai-support-on');
+  const offBtn = document.getElementById('ai-support-off');
+  if (!onBtn || !offBtn) return;
+  function setAiBtn(active) {
+    [onBtn, offBtn].forEach(b => {
+      const isActive = b === active;
+      b.style.borderColor = isActive ? '#4a90d9' : '#ccc';
+      b.style.background  = isActive ? '#e8f0ff' : 'white';
+      b.style.color       = isActive ? '#1A5CB5' : '#666';
+      b.style.fontWeight  = isActive ? 'bold'    : '';
+    });
+  }
+  onBtn.addEventListener('click',  () => { window._obAiSupport = true;  setAiBtn(onBtn);  });
+  offBtn.addEventListener('click', () => { window._obAiSupport = false; setAiBtn(offBtn); });
+})();
 
 // 選択肢のクリック処理を設定する関数
 function setupObOptions(gridId, stateKey, nextBtnId) {
@@ -2685,27 +2751,32 @@ document.getElementById('ob-next-2')
       + String(now.getSeconds()).padStart(2,'0');
     window.sessionId = `班${window.groupNumber}_${ts}`;
     window.sessionCreatedAt = now.toISOString();
+    window.aiSupport = window._obAiSupport !== false;
     document.getElementById('onboardingModal')
       .classList.add('hidden');
 
     if (obState.sheet === 'design_thinking') {
       currentTemplate = 'saguru';
+      applyAiSupportMode();
       showSetupModal();
     } else if (obState.sheet === 'minutes') {
       currentTemplate = 'minutes';
       document.getElementById('topicInput').value
         = '今日の会議';
       changePhase('minutes');
+      applyAiSupportMode();
       setRecordingControlsEnabled(true);
     } else if (obState.sheet === 'interview_sheet') {
       currentTemplate = 'interview';
       document.getElementById('topicInput').value
         = '定点面談';
       changePhase('interview');
+      applyAiSupportMode();
       setRecordingControlsEnabled(true);
     } else if (obState.sheet === 'custom') {
       currentTemplate = 'custom';
       document.getElementById('topicInput').value = '';
+      applyAiSupportMode();
       document.getElementById('customAgendaModal')
         .classList.remove('hidden');
     }
@@ -2718,7 +2789,9 @@ document.getElementById('ob-skip')
       window.sessionId = 'session_' + Date.now();
       window.sessionCreatedAt = new Date().toISOString();
     }
+    if (window.aiSupport === undefined) window.aiSupport = true;
     changePhase('saguru');
+    applyAiSupportMode();
     setRecordingControlsEnabled(true);
   });
 
@@ -2792,7 +2865,9 @@ function saveSession() {
     thought:    n.dataset.thought    || '',
     who:        n.dataset.who        || '',
     what:       n.dataset.what       || '',
-    when:       n.dataset.when       || ''
+    when:       n.dataset.when       || '',
+    source:     n.dataset.source     || '',
+    addedAt:    n.dataset.addedAt    || ''
   }));
 
   const session = {
@@ -2805,6 +2880,7 @@ function saveSession() {
     notes,
     speakerSummary: window.speakerSummary || null,
     speakerLabels:  window.speakerLabels  || {},
+    aiSupport:      window.aiSupport !== false,
     created_at:     window.sessionCreatedAt || '',
     savedAt:        new Date().toISOString()
   };
@@ -2835,7 +2911,9 @@ function saveToServer() {
       thought:    n.dataset.thought    || '',
       who:        n.dataset.who        || '',
       what:       n.dataset.what       || '',
-      when:       n.dataset.when       || ''
+      when:       n.dataset.when       || '',
+      source:     n.dataset.source     || '',
+      addedAt:    n.dataset.addedAt    || ''
     }));
     const payload = {
       session_id:     window.sessionId,
@@ -2847,6 +2925,7 @@ function saveToServer() {
       notes,
       speakerSummary: window.speakerSummary || null,
       speakerLabels:  window.speakerLabels  || {},
+      aiSupport:      window.aiSupport !== false,
       created_at:     window.sessionCreatedAt || ''
     };
     try {
@@ -2868,6 +2947,7 @@ function restoreSession(data) {
     const rawMemo = document.getElementById('rawMemo');
     if (topicInput && data.title) topicInput.value = data.title;
     if (rawMemo && data.memo) rawMemo.value = data.memo;
+    window.aiSupport = data.aiSupport !== undefined ? data.aiSupport : true;
     changePhase(data.phase || 'saguru');
     if (data.template) currentTemplate = data.template;
 
@@ -2883,7 +2963,9 @@ function restoreSession(data) {
       note.dataset.importance = n.importance || 'medium';
       note.dataset.type       = n.type       || '';
       note.dataset.thought    = n.thought    || '';
-      if (n.speaker) note.dataset.speaker = n.speaker;
+      if (n.speaker)  note.dataset.speaker  = n.speaker;
+      if (n.source)   note.dataset.source   = n.source;
+      if (n.addedAt)  note.dataset.addedAt  = n.addedAt;
       if ((n.area || '') === 'unplaced') {
         const impBorder = { high: '#E85D5D', medium: '#F0A030', low: '#CCCCCC' };
         note.style.borderLeft = `3px solid ${impBorder[n.importance || 'medium'] || impBorder.medium}`;
@@ -2897,6 +2979,7 @@ function restoreSession(data) {
     });
 
     setRecordingControlsEnabled(true);
+    applyAiSupportMode();
   } finally {
     _savingSession = false;
   }
@@ -3470,7 +3553,7 @@ function trimAreaCards(areaEl) {
   }
 }
 
-function addKeywordCard(kw, emoji, quote, type, thought, who, what, when, speaker, importance) {
+function addKeywordCard(kw, emoji, quote, type, thought, who, what, when, speaker, importance, source) {
   const pos = getNextUnplacedPosition();
   const note = createNote(
     kw, '', '', pos.x, pos.y,
@@ -3481,6 +3564,8 @@ function addKeywordCard(kw, emoji, quote, type, thought, who, what, when, speake
   note.dataset.type       = type    || '';
   note.dataset.thought    = thought || '';
   note.dataset.importance = imp;
+  note.dataset.source     = source  || 'ai';
+  note.dataset.addedAt    = new Date().toISOString();
   if (speaker) note.dataset.speaker = speaker;
   const impBorder = { high: '#E85D5D', medium: '#F0A030', low: '#CCCCCC' };
   note.style.borderLeft = `3px solid ${impBorder[imp] || impBorder.medium}`;
