@@ -998,9 +998,9 @@
     </div>
     <div style="display:flex; align-items:center; gap:8px;
                 font-size:12px;">
-      <span style="opacity:0.8;">自動配置</span>
+      <span style="opacity:0.8; display:none;">自動配置</span>
       <label style="
-        position:relative; display:inline-block;
+        position:relative; display:none;
         width:40px; height:22px;">
         <input type="checkbox" id="autoModeToggle"
                style="opacity:0; width:0; height:0;">
@@ -1049,7 +1049,8 @@
                   background:#EEF4FF; padding:10px 14px;
                   border-radius:8px; line-height:1.7; border-left:3px solid #4a90d9;">
           このシステムは、話し合いの内容を自動で見える化することで、
-          自分たちだけでは気づけなかったことに気づく手助けをするものです。
+          自分たちだけでは気づけなかったことに気づく手助けをするものです。<br>
+          カードは自動で作られますが、<strong>ワークシートへの配置はみなさん自身の手で行ってください。</strong>
         </p>
         <p style="margin:0 0 16px;font-size:14px;
                   color:#555;">
@@ -2083,12 +2084,9 @@ function setWorksheetLayout(phase) {
   if (coreProblemInput) coreProblemInput.value = coreProblemText;
   updateNotesVisibility();
 
-  const dtPhases = ['saguru','kizuku','hirameku','tsukuru','tamesu'];
+  // 自動配置セクションは常に非表示（学生が手動でエリアに配置する方針）
   const autoLayoutSec = document.getElementById('autoLayoutSection');
-  const autoModeParent = document.getElementById('autoModeToggle')?.closest('label')?.parentElement;
-  const showLayout = !dtPhases.includes(phase) && window.aiSupport !== false;
-  if (autoLayoutSec) autoLayoutSec.style.display = showLayout ? 'block' : 'none';
-  if (autoModeParent) autoModeParent.style.display = showLayout ? 'flex' : 'none';
+  if (autoLayoutSec) autoLayoutSec.style.display = 'none';
 }
 
 function updatePhaseDotsHighlight() {
@@ -2140,20 +2138,15 @@ function changePhase(newPhase) {
 
 function applyAiSupportMode() {
   const supported = window.aiSupport !== false;
-  // AI抽出セクション
+  // AI抽出セクション（支援なし条件では非表示）
   const aiSection = document.querySelector('#aiKeywordBtn')?.closest('.left-section');
   if (aiSection) aiSection.style.display = supported ? '' : 'none';
-  // リアルタイム配置セクション
+  // リアルタイム配置セクションは常に非表示（自動配置を無効化）
   const realtimeSec = document.getElementById('realtimeSection');
-  if (realtimeSec) realtimeSec.style.display = supported ? '' : 'none';
-  // 自動配置・ヘッダートグルは setWorksheetLayout 経由で制御
-  // 現在のフェーズで再計算して上書き
-  const dtPhases = ['saguru','kizuku','hirameku','tsukuru','tamesu'];
+  if (realtimeSec) realtimeSec.style.display = 'none';
+  // 自動配置セクションは常に非表示
   const autoLayoutSec = document.getElementById('autoLayoutSection');
-  const autoModeParent = document.getElementById('autoModeToggle')?.closest('label')?.parentElement;
-  const showLayout = !dtPhases.includes(currentPhase) && supported;
-  if (autoLayoutSec) autoLayoutSec.style.display = showLayout ? 'block' : 'none';
-  if (autoModeParent) autoModeParent.style.display = showLayout ? 'flex' : 'none';
+  if (autoLayoutSec) autoLayoutSec.style.display = 'none';
 }
 
 // フェーズごとに付箋を非表示／表示（未配置は常に表示）
@@ -2272,19 +2265,7 @@ async function extractAndPlaceKeywords(text, _segments) {
         item.importance || ""
       );
     });
-    const autoToggle = document.getElementById('autoModeToggle');
-    if (autoToggle && autoToggle.checked) {
-      await runAutoLayout(false);
-    } else {
-      const template = window.currentTemplate || "";
-      if (template !== "saguru" &&
-          template !== "kizuku" &&
-          template !== "hirameku" &&
-          template !== "tsukuru" &&
-          template !== "tamesu") {
-        await runAutoLayout(false);
-      }
-    }
+    // 自動配置は無効化 — カードは未配置エリアに生成され、学生が手動でエリアに移動する
   } catch (e) {
     console.error("extractAndPlaceKeywords error:", e);
   }
