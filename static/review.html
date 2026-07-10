@@ -173,6 +173,36 @@
       margin-top: 2px;
     }
 
+    /* カードのソースバッジ（手動追加 / AI分析） */
+    .source-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 7px;
+      border-radius: 8px;
+      margin-top: 4px;
+      font-weight: bold;
+    }
+    .source-manual { background: #e8f8ee; color: #1a7a40; }
+    .source-ai     { background: #e8f0ff; color: #1A5CB5; }
+
+    /* AI開示バナー（支援なし条件） */
+    #ai-disclosure-banner {
+      background: #fff8e1;
+      border: 1px solid #f0cc60;
+      border-left: 4px solid #f0a030;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: #664d00;
+      line-height: 1.8;
+    }
+    #ai-disclosure-banner strong.banner-title {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 6px;
+    }
+
     /* データなし */
     #no-data {
       display: none;
@@ -222,6 +252,15 @@
       <span id="review-group"></span>
       <span id="review-ai-badge"></span>
     </div>
+  </div>
+
+  <!-- AI開示バナー（支援なし条件） -->
+  <div id="ai-disclosure-banner" style="display:none;">
+    <strong class="banner-title">📊 AI分析の開示（振り返り用）</strong>
+    この話し合いは「AI支援なし」条件で実施されました。<br>
+    以下のカードはAIが自動生成したもので、<strong>話し合い中は画面に表示されていませんでした。</strong><br>
+    振り返りのために、ここで初めて表示しています。
+    手動で追加したカードには <span class="source-badge source-manual">🖊 手動追加</span> のマークがついています。
   </div>
 
   <!-- 発言量サマリー -->
@@ -463,12 +502,17 @@ function makeCard(data, labels) {
     ? ((labels && labels[data.speaker]) || data.speaker)
     : '';
 
+  const sourceBadge = data.source === 'manual'
+    ? '<span class="source-badge source-manual">🖊 手動追加</span>'
+    : (data.source === 'ai' ? '<span class="source-badge source-ai">✨ AI分析</span>' : '');
+
   el.innerHTML = `
     <div class="card-keyword">${escHtml(data.keyword || '')}</div>
     <div class="card-quote">${data.quote ? '「' + escHtml(data.quote) + '」' : ''}</div>
     ${speakerName
       ? `<span class="speaker-badge" data-speaker-id="${escHtml(data.speaker)}">🎤 ${escHtml(speakerName)}</span>`
       : ''}
+    ${sourceBadge}
   `;
   return el;
 }
@@ -496,6 +540,12 @@ async function loadAndRender(session) {
     aiBadge.innerHTML = '<span class="meta-badge meta-badge-ai-on">✨ AI支援あり</span>';
   }
   document.getElementById('review-meta').style.display = '';
+
+  // 支援なし条件では開示バナーを表示
+  const disclosureBanner = document.getElementById('ai-disclosure-banner');
+  if (disclosureBanner) {
+    disclosureBanner.style.display = session.aiSupport === false ? '' : 'none';
+  }
 
   // 発言量サマリー
   if (session.speakerSummary && session.speakerSummary.length > 0) {

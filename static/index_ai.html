@@ -523,14 +523,14 @@
 
     .area-label {
       position: absolute;
-      top: -24px;
+      top: -32px;
       left: 0;
       white-space: nowrap;
       background: rgba(255,255,255,0.92);
-      padding: 3px 10px;
+      padding: 4px 12px;
       border-radius: 4px 4px 0 0;
       font-weight: bold;
-      font-size: 14px;
+      font-size: 18px;
       display: flex;
       align-items: center;
       gap: 5px;
@@ -538,12 +538,15 @@
       box-shadow: 0 -1px 3px rgba(0,0,0,0.06);
     }
     .area-label span.icon {
-      font-size: 15px;
+      font-size: 20px;
     }
     .area-hint {
       font-size: 12px;
       color: #555;
     }
+
+    /* 支援なし条件：AI生成カードを非表示で保持（データはサーバーに保存） */
+    .note.ai-pending { display: none !important; }
 
     .note {
       position: absolute;
@@ -966,6 +969,18 @@
   </style>
 </head>
 <body>
+  <!-- APIエラー通知バナー -->
+  <div id="apiErrorBanner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:10000;
+    background:#c0392b; color:white; padding:12px 20px; font-size:14px;
+    align-items:center; gap:12px; box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+    <span style="font-size:18px; flex-shrink:0;">⚠️</span>
+    <span id="apiErrorBannerMsg">うまく処理できませんでした。もう一度試すか、このままメモ欄に直接書き込んで話し合いを続けてください。</span>
+    <button onclick="document.getElementById('apiErrorBanner').style.display='none'"
+      style="margin-left:auto; background:none; border:1px solid rgba(255,255,255,0.7);
+      color:white; padding:4px 12px; border-radius:4px; cursor:pointer; font-size:13px; white-space:nowrap;">
+      ✕ 閉じる
+    </button>
+  </div>
   <header style="
     background: #1A3A5C;
     color: white;
@@ -2195,6 +2210,29 @@ function applyUnplacedNoteStyle(note) {
   note.style.display    = 'block';
 }
 
+// ==== APIエラー通知・リトライ共通ユーティリティ ====
+const API_ERROR_MSG = 'うまく処理できませんでした。もう一度試すか、このままメモ欄に直接書き込んで話し合いを続けてください。';
+
+function showApiError(msg) {
+  const banner = document.getElementById('apiErrorBanner');
+  if (!banner) return;
+  const msgEl = document.getElementById('apiErrorBannerMsg');
+  if (msgEl) msgEl.textContent = msg || API_ERROR_MSG;
+  banner.style.display = 'flex';
+  if (banner._autoHide) clearTimeout(banner._autoHide);
+  banner._autoHide = setTimeout(() => { banner.style.display = 'none'; }, 20000);
+}
+
+async function fetchWithRetry(url, options) {
+  try {
+    return await fetch(url, options);
+  } catch(e) {
+    // ネットワークエラー時1回だけリトライ
+    await new Promise(r => setTimeout(r, 2000));
+    return await fetch(url, options);
+  }
+}
+
 // ==== 音声アップロード ====
 const rawMemoEl          = document.getElementById("rawMemo");
 const audioFileInput     = document.getElementById("audioFileInput");
@@ -2299,7 +2337,7 @@ async function processAudioInChunks(file) {
       formData.append("num_speakers", window.numSpeakers ?? 3);
 
       try {
-        const res = await fetch("/api/transcribe_chunk", {
+        const res = await fetchWithRetry("/api/transcribe_chunk", {
           method: "POST",
           body: formData
         });
@@ -2333,6 +2371,7 @@ async function processAudioInChunks(file) {
         }
       } catch (e) {
         console.error(`chunk ${i + 1} error:`, e);
+        showApiError();
       }
     }
 
@@ -2352,6 +2391,7 @@ async function processAudioInChunks(file) {
 
     statusEl.textContent = `✅ 変換完了！（${totalChunks}チャンク処理済み）`;
   } catch (e) {
+    showApiError();
     statusEl.textContent = "⚠️ 音声の変換に失敗しました。";
     console.error("processAudioInChunks error:", e);
   } finally {
@@ -2387,6 +2427,7 @@ let analyser = null;
 let vadDataArray = null;
 let lastVoiceTime = 0;
 let vadRunning = false;
+let vadConfirmPending = false;
 
 // リアルタイム自動配置
 let timerInterval = null;
@@ -2410,6 +2451,7 @@ function stopRecordingInternal() {
     recordStatus.textContent = "録音停止処理中…";
   }
   vadRunning = false;
+  vadConfirmPending = false;
   if (realtimeRunning) stopRealtimeMode();
 }
 
@@ -2431,10 +2473,22 @@ function startVadLoop() {
     } else {
       // 無音が続いているか確認
       const silentMs = Date.now() - lastVoiceTime;
-      if (silentMs > VAD_CONFIG.silenceDuration) {
-        recordStatus.textContent = "無音が続いたため自動停止します…";
-        stopRecordingInternal();
-        return;
+      if (silentMs > VAD_CONFIG.silenceDuration && !vadConfirmPending) {
+        vadConfirmPending = true;
+        recordStatus.textContent = "⏸ 話し合いが止まっているようです…";
+        setTimeout(() => {
+          if (!vadRunning) { vadConfirmPending = false; return; }
+          const stop = confirm("話し合いが止まっているようです。\n録音を終了しますか？\n\n「いいえ」を選ぶと録音を継続します。");
+          vadConfirmPending = false;
+          if (stop) {
+            stopRecordingInternal();
+          } else {
+            lastVoiceTime = Date.now();
+            recordStatus.textContent = "🔴 録音中…（継続）";
+            requestAnimationFrame(loop);
+          }
+        }, 100);
+        return; // confirm表示中はrAFを一時停止
       }
     }
     requestAnimationFrame(loop);
@@ -2493,14 +2547,14 @@ startRecordBtn.onclick = async () => {
       try {
         const formData = new FormData();
         formData.append("audio", blob, "recorded.webm");
-        const res = await fetch("/api/transcribe_with_speakers", {
+        const res = await fetchWithRetry("/api/transcribe_with_speakers", {
           method: "POST",
           body: formData,
         });
         const data = await res.json();
         if (!res.ok || !data.ok) {
-          const msg = data.error || `サーバーエラー (${res.status})`;
-          recordStatus.textContent = "文字起こしエラー: " + msg;
+          showApiError();
+          recordStatus.textContent = "⚠️ 文字起こしに失敗しました";
           return;
         }
         const text = data.text || "";
@@ -2517,8 +2571,39 @@ startRecordBtn.onclick = async () => {
         window.speakerSummary  = data.speaker_summary || null;
         window.speakerSegments = data.segments || [];
         if (window.speakerSummary) renderSpeakerSummary();
+
+        // 支援なし条件でも裏側でAI抽出を実行（カードは非表示で保存）
+        if (window.aiSupport === false && text) {
+          recordStatus.textContent = "AI分析中（バックグラウンド）…";
+          try {
+            const kwRes = await fetchWithRetry('/api/extract_keywords', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                memo: text, phase: currentPhase,
+                template: currentTemplate || "", areas: getCustomAreas()
+              })
+            });
+            const kwData = await kwRes.json();
+            if (kwData.ok) {
+              (kwData.keywords || []).forEach(item => {
+                const kw = item.keyword || '';
+                if (!kw) return;
+                addKeywordCard(kw, getEmojiForKeyword(kw), item.quote || '',
+                  item.type || '', item.thought || '',
+                  item.who || '', item.what || '', item.when || '',
+                  undefined, item.importance || 'medium');
+              });
+              saveSession();
+            }
+          } catch(e) {
+            console.warn('バックグラウンドAI抽出エラー:', e);
+          }
+          recordStatus.textContent = "文字起こし完了：メモ欄に追記しました。";
+        }
       } catch (e) {
-        recordStatus.textContent = "通信エラー: " + e;
+        showApiError();
+        recordStatus.textContent = "⚠️ 通信エラーが発生しました";
       } finally {
         if (mediaRecorder && mediaRecorder.stream) {
           mediaRecorder.stream.getTracks().forEach((t) => t.stop());
@@ -2561,14 +2646,15 @@ aiKeywordBtn.onclick = async () => {
   aiKeywordStatus.textContent = "🤖 AIがキーワードを抽出中です…";
   aiKeywordBtn.disabled = true;
   try {
-    const res = await fetch("/api/extract_keywords", {
+    const res = await fetchWithRetry("/api/extract_keywords", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ memo: memoText, phase: phase, template: currentTemplate || "", areas: getCustomAreas() })
     });
     const data = await res.json();
     if (!res.ok || !data.ok) {
-      aiKeywordStatus.textContent = "⚠️ キーワードの抽出に失敗しました。もう一度試してください。";
+      showApiError();
+      aiKeywordStatus.textContent = "⚠️ AIの処理に失敗しました";
       aiKeywordBtn.disabled = false;
       return;
     }
@@ -2587,7 +2673,8 @@ aiKeywordBtn.onclick = async () => {
       addKeywordCard(kw, getEmojiForKeyword(kw), quote, type, thought, who, what, when, undefined, imp);
     });
   } catch (e) {
-    aiKeywordStatus.textContent = "⚠️ キーワードの抽出に失敗しました。もう一度試してください。";
+    showApiError();
+    aiKeywordStatus.textContent = "⚠️ AIの処理に失敗しました";
   } finally {
     aiKeywordBtn.disabled = false;
   }
@@ -2966,6 +3053,10 @@ function restoreSession(data) {
       if (n.speaker)  note.dataset.speaker  = n.speaker;
       if (n.source)   note.dataset.source   = n.source;
       if (n.addedAt)  note.dataset.addedAt  = n.addedAt;
+      // 支援なし条件ではAI生成カードを非表示で復元
+      if (window.aiSupport === false && (n.source || 'ai') !== 'manual') {
+        note.classList.add('ai-pending');
+      }
       if ((n.area || '') === 'unplaced') {
         const impBorder = { high: '#E85D5D', medium: '#F0A030', low: '#CCCCCC' };
         note.style.borderLeft = `3px solid ${impBorder[n.importance || 'medium'] || impBorder.medium}`;
@@ -3008,6 +3099,7 @@ window.addEventListener('load', async () => {
         window.groupNumber     = data.session.group_number || '';
         window.sessionCreatedAt = data.session.created_at || '';
         restoreSession(data.session);
+        history.replaceState(null, '', `/?session=${encodeURIComponent(window.sessionId)}`);
         return;
       }
     } catch(e) {
@@ -3063,14 +3155,29 @@ window.addEventListener('load', async () => {
         document.body.appendChild(modal);
 
         document.getElementById('btn-restore')
-          .addEventListener('click', () => {
+          .addEventListener('click', async () => {
+            modal.remove();
             if (session.session_id) {
               window.sessionId        = session.session_id;
               window.groupNumber      = session.group_number || '';
               window.sessionCreatedAt = session.created_at  || '';
+              // サーバーから最新データを優先取得
+              try {
+                const sRes = await fetch(`/api/get_session/${encodeURIComponent(session.session_id)}`);
+                const sData = await sRes.json();
+                if (sData.ok && sData.session) {
+                  window.sessionId        = sData.session.session_id || session.session_id;
+                  window.groupNumber      = sData.session.group_number || '';
+                  window.sessionCreatedAt = sData.session.created_at || '';
+                  restoreSession(sData.session);
+                  history.replaceState(null, '', `/?session=${encodeURIComponent(window.sessionId)}`);
+                  return;
+                }
+              } catch(e) {
+                console.warn('サーバーから最新データの取得に失敗。ローカルデータで復元:', e);
+              }
             }
             restoreSession(session);
-            modal.remove();
           });
 
         document.getElementById('btn-fresh')
@@ -3570,6 +3677,10 @@ function addKeywordCard(kw, emoji, quote, type, thought, who, what, when, speake
   const impBorder = { high: '#E85D5D', medium: '#F0A030', low: '#CCCCCC' };
   note.style.borderLeft = `3px solid ${impBorder[imp] || impBorder.medium}`;
   applyUnplacedNoteStyle(note);
+  // 支援なし条件ではAI生成カードを非表示で保持（セッションデータには保存される）
+  if (window.aiSupport === false && note.dataset.source !== 'manual') {
+    note.classList.add('ai-pending');
+  }
   saveSession();
   return note;
 }

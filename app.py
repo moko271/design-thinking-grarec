@@ -1165,6 +1165,20 @@ def _compute_metrics(d: dict) -> dict:
     }
 
 
+@app.route("/api/delete_session/<session_id>", methods=["DELETE"])
+@require_admin
+def delete_session(session_id):
+    session_id = _sanitize_session_id(session_id)
+    filepath = os.path.join(SESSIONS_DIR, f"{session_id}.json")
+    if not os.path.exists(filepath):
+        return jsonify({"ok": False, "error": "session not found"}), 404
+    try:
+        os.remove(filepath)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/api/list_sessions", methods=["GET"])
 @require_admin
 def list_sessions():

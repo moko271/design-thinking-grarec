@@ -75,6 +75,12 @@
     }
     .expand-icon { font-size: 12px; transition: transform .2s; display: inline-block; }
     .expand-icon.open { transform: rotate(90deg); }
+    .del-btn {
+      background: none; color: #c0392b; border: 1px solid #c0392b;
+      padding: 2px 8px; border-radius: 4px; cursor: pointer;
+      font-size: 11px; font-weight: bold;
+    }
+    .del-btn:hover { background: #c0392b; color: white; }
   </style>
 </head>
 <body>
@@ -262,6 +268,8 @@ async function loadSessions() {
           <a href="/review?session=${encodeURIComponent(s.session_id)}" target="_blank">振り返り</a>
           ／
           <a href="/?session=${encodeURIComponent(s.session_id)}" target="_blank">GraRec</a>
+          ／
+          <button class="del-btn" data-sid="${esc(s.session_id)}" onclick="deleteSession(this, event)">削除</button>
         </td>`;
       tbody.appendChild(tr);
 
@@ -289,6 +297,28 @@ async function loadSessions() {
     document.getElementById('tbl').style.display = 'table';
   } catch(e) {
     document.getElementById('status').textContent = 'エラー: ' + e.message;
+  }
+}
+
+async function deleteSession(btn, event) {
+  event.stopPropagation(); // 行クリック（展開）をキャンセル
+  const sid = btn.dataset.sid;
+  if (!confirm(`セッション「${sid}」を削除しますか？\nこの操作は取り消せません。`)) return;
+  try {
+    const res = await fetch(`/api/delete_session/${encodeURIComponent(sid)}`, { method: 'DELETE' });
+    if (res.status === 401) { alert('認証エラー。ページをリロードしてください。'); return; }
+    const data = await res.json();
+    if (!data.ok) { alert('削除失敗: ' + data.error); return; }
+    // 該当の data-row と detail-row を DOM から除去
+    const dataRow   = btn.closest('tr.data-row');
+    const detailRow = dataRow?.nextElementSibling;
+    dataRow?.remove();
+    detailRow?.remove();
+    // カウント更新
+    const remaining = document.querySelectorAll('tr.data-row').length;
+    document.getElementById('status').textContent = `${remaining} 件のセッション`;
+  } catch(e) {
+    alert('エラー: ' + e.message);
   }
 }
 
