@@ -3575,8 +3575,9 @@ function createNote(kw, emoji, subject, x, y, quote = '', skipGrafico = false, w
   note.addEventListener('mouseenter', () => { deleteBtn.style.display = 'block'; });
   note.addEventListener('mouseleave', () => { deleteBtn.style.display = 'none'; });
 
-  note.style.left = x + "px";
-  note.style.top = y + "px";
+  const toCSS = v => { const s = String(v ?? 0); return s.endsWith('px') ? s : s + 'px'; };
+  note.style.left = toCSS(x);
+  note.style.top  = toCSS(y);
   canvasEl.appendChild(note);
   makeNoteDraggable(note);
   updateNotesVisibility();
