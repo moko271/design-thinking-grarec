@@ -3223,10 +3223,11 @@ function saveToProject() {
       _quantumProjectData.aiSupport = _quantumAiSupport;
       restoreSession(_quantumProjectData);
     } else {
-      // 新規: さぐるフェーズから開始、フェーズ選択ダイアログへ
+      // 新規: さぐるフェーズから直接開始（setupModalは不要）
       currentTemplate = 'saguru';
+      changePhase('saguru');
       applyAiSupportMode();
-      showSetupModal();
+      setRecordingControlsEnabled(true);
     }
     saveSession();
   });
