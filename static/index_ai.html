@@ -2945,9 +2945,9 @@ startRecordBtn.onclick = async () => {
           recordStatus.textContent =
             "テキストが空でした。話し合いが短すぎたかもしれません。";
         }
-        window.speakerSummary  = data.speaker_summary || null;
-        window.speakerSegments = data.segments || [];
-        if (window.speakerSummary) renderSpeakerSummary();
+        // 話者分離は行わないため speaker_summary は空（後日オフライン処理）
+        window.speakerSummary  = null;
+        window.speakerSegments = [];
 
         // 支援なし条件でも裏側でAI抽出を実行（カードは非表示で保存）
         if (window.aiSupport === false && text) {

@@ -15,9 +15,8 @@ from pydub import AudioSegment
 from flask import Flask, request, jsonify, send_from_directory, Response
 from dotenv import load_dotenv
 from openai import OpenAI
-from pyannote.audio import Pipeline
-import torch
-import soundfile as sf
+# pyannote / torch / soundfile は話者分離除外に伴い不使用
+# （後日オフライン処理用に requirements.txt は維持）
 
 # =========================
 # 環境変数・クライアント準備
@@ -71,20 +70,6 @@ def require_admin(f):
             {"WWW-Authenticate": 'Basic realm="GraRec Admin"'},
         )
     return decorated
-
-# =========================
-# pyannote パイプラインキャッシュ
-# =========================
-_diarization_pipeline = None
-
-def get_diarization_pipeline():
-    global _diarization_pipeline
-    if _diarization_pipeline is None:
-        _diarization_pipeline = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization-3.1",
-            token=os.getenv("HUGGINGFACE_TOKEN")
-        )
-    return _diarization_pipeline
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -557,8 +542,8 @@ def transcribe():
 @app.route("/api/transcribe_with_speakers", methods=["POST"])
 def transcribe_with_speakers():
     """
-    音声ファイルをWhisper + pyannoteで処理し、
-    話者情報付きのテキストと発言量サマリーを返す。
+    音声ファイルをWhisperで文字起こしする（話者分離なし・軽量版）。
+    録音ファイルは RECORDINGS_DIR に保存する（後日オフライン話者分離用）。
     """
     if "audio" not in request.files:
         return jsonify({"ok": False, "error": "no audio file"}), 400
@@ -570,55 +555,15 @@ def transcribe_with_speakers():
         tmp_path = tmp.name
         audio_file.save(tmp_path)
 
-    wav_path = tmp_path + ".wav"
     try:
-        result = subprocess.run([
-            "ffmpeg", "-i", tmp_path,
-            "-ar", "16000", "-ac", "1",
-            wav_path, "-y"
-        ], capture_output=True, text=True)
-        if result.returncode != 0:
-            print("ffmpeg error:", result.stderr)
-            raise Exception("ffmpeg変換失敗: " + result.stderr[-200:])
-
-        pipeline = get_diarization_pipeline()
-        data, sample_rate = sf.read(wav_path)
-        waveform = torch.tensor(data).unsqueeze(0).float()
-        audio_input = {"waveform": waveform, "sample_rate": sample_rate}
-        diarization = pipeline(audio_input).speaker_diarization
-
-        totals = defaultdict(float)
-        counts = defaultdict(int)
-        segments = []
-        for turn, _, speaker in diarization.itertracks(yield_label=True):
-            totals[speaker] += turn.end - turn.start
-            counts[speaker] += 1
-            segments.append({
-                "start": round(turn.start, 2),
-                "end": round(turn.end, 2),
-                "speaker": speaker
-            })
-
-        total_time = sum(totals.values())
-        speaker_summary = []
-        for sp in sorted(totals.keys()):
-            pct = totals[sp] / total_time * 100 if total_time > 0 else 0
-            speaker_summary.append({
-                "speaker": sp,
-                "duration": round(totals[sp], 1),
-                "percentage": round(pct, 1),
-                "count": counts[sp],
-                "label": sp
-            })
-
         text = (split_and_transcribe(tmp_path, suffix) or "").strip()
 
         return jsonify({
             "ok": True,
             "text": text,
-            "segments": segments,
-            "speaker_summary": speaker_summary,
-            "num_speakers": len(totals)
+            "segments": [],
+            "speaker_summary": [],
+            "num_speakers": 0
         })
 
     except Exception as e:
@@ -633,11 +578,6 @@ def transcribe_with_speakers():
             print(f"Warning: 録音ファイル保存失敗: {_e}")
         try:
             os.remove(tmp_path)
-        except OSError:
-            pass
-        try:
-            if os.path.exists(wav_path):
-                os.remove(wav_path)
         except OSError:
             pass
 
@@ -1044,17 +984,16 @@ def get_audio_duration():
 @app.route("/api/transcribe_chunk", methods=["POST"])
 def transcribe_chunk():
     """
-    音声ファイルの指定した時間範囲だけを処理して返す。
+    音声ファイルの指定した時間範囲をWhisperで文字起こしする（話者分離なし・軽量版）。
     chunk_start, chunk_end: 秒数（form フィールド）
-    num_speakers: 話者数ヒント
+    録音チャンクは RECORDINGS_DIR に保存する（後日オフライン話者分離用）。
     """
     if "audio" not in request.files:
         return jsonify({"ok": False, "error": "no audio file"}), 400
 
     audio_file = request.files["audio"]
-    chunk_start  = float(request.form.get("chunk_start", 0))
-    chunk_end    = float(request.form.get("chunk_end", 300))
-    num_speakers = int(request.form.get("num_speakers", 2))
+    chunk_start = float(request.form.get("chunk_start", 0))
+    chunk_end   = float(request.form.get("chunk_end", 300))
     suffix = os.path.splitext(audio_file.filename)[1] or ".webm"
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -1074,25 +1013,6 @@ def transcribe_chunk():
             print("ffmpeg error:", result.stderr)
             raise Exception("ffmpeg失敗: " + result.stderr[-200:])
 
-        pipeline = get_diarization_pipeline()
-        data, sample_rate = sf.read(wav_path)
-        waveform = torch.tensor(data).unsqueeze(0).float()
-        audio_input = {"waveform": waveform, "sample_rate": sample_rate}
-        if num_speakers >= 2:
-            diarization = pipeline(audio_input, num_speakers=num_speakers).speaker_diarization
-        else:
-            diarization = pipeline(audio_input).speaker_diarization
-
-        segments = []
-        totals = defaultdict(float)
-        counts = defaultdict(int)
-        for turn, _, speaker in diarization.itertracks(yield_label=True):
-            real_start = round(turn.start + chunk_start, 2)
-            real_end   = round(turn.end   + chunk_start, 2)
-            segments.append({"start": real_start, "end": real_end, "speaker": speaker})
-            totals[speaker] += turn.end - turn.start
-            counts[speaker] += 1
-
         with open(wav_path, "rb") as f:
             whisper_res = client.audio.transcriptions.create(
                 model="whisper-1",
@@ -1101,22 +1021,11 @@ def transcribe_chunk():
             )
         text = (whisper_res.text or "").strip()
 
-        total_time = sum(totals.values())
-        speaker_summary = []
-        for sp in sorted(totals.keys()):
-            pct = totals[sp] / total_time * 100 if total_time > 0 else 0
-            speaker_summary.append({
-                "speaker": sp,
-                "duration": round(totals[sp], 1),
-                "percentage": round(pct, 1),
-                "count": counts[sp]
-            })
-
         return jsonify({
             "ok": True,
             "text": text,
-            "segments": segments,
-            "speaker_summary": speaker_summary,
+            "segments": [],
+            "speaker_summary": [],
             "chunk_start": chunk_start,
             "chunk_end": chunk_end
         })
