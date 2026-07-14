@@ -1496,21 +1496,12 @@
                 style="font-size:11px; color:#c62828;
                        margin-top:4px; display:block;"></span>
 
-          <div style="margin-top:8px; font-size:12px;
-                      color:#666;">
-            または音声ファイルを選択：
+          <!-- 音声ファイルアップロード欄（ライブ録音のみ運用のため非表示） -->
+          <div style="display:none;">
+            <input id="audioFileInput" type="file" accept="audio/*"/>
+            <button id="uploadAudioBtn">変換</button>
+            <span id="transcribeStatus"></span>
           </div>
-          <div style="display:flex; gap:6px;
-                      align-items:center; margin-top:4px;">
-            <input id="audioFileInput" type="file"
-                   accept="audio/*"
-                   style="font-size:11px; flex:1;"/>
-            <button id="uploadAudioBtn"
-                    class="btn-secondary">変換</button>
-          </div>
-          <span id="transcribeStatus"
-                style="font-size:11px; color:#555;
-                       margin-top:4px; display:block;"></span>
         </div>
 
         <!-- テキストメモ（非表示・機能は維持） -->
@@ -2048,7 +2039,7 @@ function phaseLabel(p){
 }
 
 // ===== 共有定数 =====
-const AUTO_INTERVAL = 180000; // 3分（カード生成・タイムラプス共通）
+const AUTO_INTERVAL = 120000; // 2分（カード生成・タイムラプス共通）
 
 // ===== mentionCount：重複カード検出 =====
 function normalizeKw(kw) {
@@ -2949,9 +2940,10 @@ startRecordBtn.onclick = async () => {
         window.speakerSummary  = null;
         window.speakerSegments = [];
 
-        // 支援なし条件でも裏側でAI抽出を実行（カードは非表示で保存）
-        if (window.aiSupport === false && text) {
-          recordStatus.textContent = "AI分析中（バックグラウンド）…";
+        // 自動セグメント or 支援なし → AI抽出してカード生成
+        // （支援なしの場合は addKeywordCard 内で ai-pending クラスが付き非表示）
+        if ((wasAutoSegment || window.aiSupport === false) && text) {
+          recordStatus.textContent = "AI分析中…";
           try {
             const kwRes = await fetchWithRetry('/api/extract_keywords', {
               method: 'POST',
@@ -2974,9 +2966,11 @@ startRecordBtn.onclick = async () => {
               saveSession();
             }
           } catch(e) {
-            console.warn('バックグラウンドAI抽出エラー:', e);
+            console.warn('AI抽出エラー:', e);
           }
-          recordStatus.textContent = "文字起こし完了：メモ欄に追記しました。";
+          recordStatus.textContent = wasAutoSegment
+            ? "カード生成完了。次のセグメントを開始中…"
+            : "文字起こし完了：メモ欄に追記しました。";
         }
       } catch (e) {
         showApiError();
@@ -2991,9 +2985,10 @@ startRecordBtn.onclick = async () => {
           audioContext = null;
         }
         if (wasAutoSegment) {
-          // 3分セグメント完了 → 新しいセグメントを自動開始
-          recordStatus.textContent = "⏳ 次のセグメントを開始中…";
+          // 自動セグメント完了 → 新しいセグメントを自動開始
+          // disabled を外してから click() しないとブラウザが無視する
           _isAutoSegment = true;
+          startRecordBtn.disabled = false;
           setTimeout(() => startRecordBtn.click(), 500);
         } else {
           startRecordBtn.disabled = false;
