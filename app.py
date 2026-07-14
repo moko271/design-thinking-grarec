@@ -262,8 +262,8 @@ def build_prompt(memo: str, phase: str, prev_text: str = "") -> tuple[str, str]:
         "- interpret：なぜそうなるか・解釈\n"
         "- wish：こうしたい・こうあるべき\n\n"
         "【フェーズ別の抽出方針】\n"
-        "- さぐる：thought=factを中心に、現状・観察を多めに抽出\n"
-        "- きづく：thought=problem/interpretを中心に抽出\n"
+        "- さぐる：ペルソナの人物像・現状イメージ・触れる場面を中心に抽出（thought=fact中心）\n"
+        "- きづく：ペルソナのつまずき・深掘り発言・インサイト候補を中心に抽出（thought=problem/interpret中心）\n"
         "- ひらめく：type=ideaを中心に、解決アイデアを多めに抽出\n"
         "- つくる：具体的な機能・形状に関する発言を抽出\n"
         "- ためす：良かった点・改善点・次の一手を抽出\n"
@@ -651,36 +651,44 @@ def build_layout_prompt(phase, cards, canvas_width, canvas_height, areas=None):
     if phase in ("saguru", "kizuku"):
         area_guide = """
 【絶対ルール：saguru/kizukuフェーズで使えるエリアのみ選ぶ】
+このワークシートは量子力学を伝える相手（ペルソナ）を妄想で設定し、
+ペルソナへの伝え方を考えるデザイン思考活動です。
 
-area-target：
-  人物・ターゲットに関するもの
-  例）「お母さんが困っている」「中学生が〜」
+--- さぐるグループ（上段） ---
 
-area-fact：
-  thought=fact または thought=problem のもの
-  現状・観察・困っていること・事実の報告
-  例）「混乱する」「リモコンを失くす」「ボタンが多すぎる」
+area-persona：
+  伝える相手（ペルソナ）の人物像に関するカード
+  例）「中学2年生、理科は好き」「数式が苦手」「宇宙や不思議な話が好き」
 
-area-wish：
-  thought=wish かつ 「こうしたい・こうあるべき」
-  という純粋な願望・要望を表すもの
-  例）「シンプルで直感的にしたい」「使いやすくしてほしい」
+area-current-image：
+  ペルソナが量子力学に対して持っていそうなイメージ・知識レベルのカード
+  例）「聞いたことはあるけど難しそう」「なんか怖い実験みたい」
 
-area-interpret：
-  thought=interpret のもの、
-  または type=idea / type=reaction / type=opinion で
-  thought=wish のもの（アイデアや反応は解釈エリアへ）
-  例）「シンプルなインターフェース（アイデア）」
-      「いいアイデア（reaction）」
-      「追跡機能（idea）」
-      「役立つ（reaction）」
+area-scene：
+  ペルソナが量子力学に触れそうな場面・状況のカード
+  例）「理科の授業で先生が言及」「SF映画で量子テレポーテーション」「ニュースで聞いた」
+
+--- きづくグループ（下段） ---
+
+area-confusion：
+  ペルソナが量子力学のどの用語・概念につまずきそうかのカード
+  例）「重ね合わせって何？」「シュレーディンガーの猫が意味不明」「波と粒って両方？」
+
+area-why-but：
+  「なぜなら」「でも・じつは」という形で深掘りした発言のカード
+  例）「面白そうだけど、なぜなら映画で見たから」「じつは量子コンピュータは知っている」
+
+area-insight：
+  ペルソナの本当の困りごと・知りたいことを一行でまとめたカード
+  例）「どうすれば中学生にも量子力学の面白さを感じてもらえるか？」
 
 【判断のポイント】
-・type=ideaのカードは、さぐるフェーズでは
-  area-interpretに入れる
-  （アイデアはさぐる段階では「解釈・仮説」として扱う）
-・type=reactionのカードは area-interpret に入れる
-・思い切り「〜したい」という願望表現のみ area-wish に入れる
+・ペルソナの人物像 → area-persona
+・ペルソナの現状イメージ → area-current-image
+・ペルソナが触れる場面 → area-scene
+・つまずきそうな用語・概念 → area-confusion
+・「なぜなら」「でも・じつは」の深掘り → area-why-but
+・一行の問いにまとめたもの → area-insight
 """
     elif phase == "hirameku":
         area_guide = """

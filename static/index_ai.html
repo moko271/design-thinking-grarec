@@ -432,26 +432,38 @@
       overflow: visible;
     }
 
-    /* さぐる・きづく */
-    .layout-saguru-kizuku #area-target {
-      top: 4px; left: 4px; right: 4px; height: 16%;
+    /* さぐる・きづく（6エリア 2行×3列） */
+    /* 上段：さぐるグループ */
+    .layout-saguru-kizuku #area-persona {
+      top: 4px; left: 2%; width: 29%; height: 44%;
       border-color: #9c27b0;
       background: rgba(243, 229, 245, 0.9);
     }
-    .layout-saguru-kizuku #area-fact {
-      top: 22%; left: 4px; right: 50%; height: 38%;
+    .layout-saguru-kizuku #area-current-image {
+      top: 4px; left: 34%; width: 29%; height: 44%;
       border-color: #4caf50;
       background: rgba(232, 245, 233, 0.9);
     }
-    .layout-saguru-kizuku #area-wish {
-      top: 22%; left: 50%; right: 4px; height: 24%;
+    .layout-saguru-kizuku #area-scene {
+      top: 4px; left: 66%; right: 2%; height: 44%;
       border-color: #3f51b5;
       background: rgba(232, 234, 246, 0.9);
     }
-    .layout-saguru-kizuku #area-interpret {
-      top: 48%; left: 50%; right: 4px; height: 26%;
+    /* 下段：きづくグループ */
+    .layout-saguru-kizuku #area-confusion {
+      top: 52%; left: 2%; width: 29%; bottom: 4px;
       border-color: #ff9800;
       background: rgba(255, 243, 224, 0.9);
+    }
+    .layout-saguru-kizuku #area-why-but {
+      top: 52%; left: 34%; width: 29%; bottom: 4px;
+      border-color: #e91e63;
+      background: rgba(252, 228, 236, 0.9);
+    }
+    .layout-saguru-kizuku #area-insight {
+      top: 52%; left: 66%; right: 2%; bottom: 4px;
+      border-color: #2196f3;
+      background: rgba(227, 242, 253, 0.9);
     }
 
     /* ひらめく */
@@ -675,19 +687,44 @@
     }
 
     .next-phase-buttons {
-      font-size: 11px;
-      text-align: right;
-      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 14px;
+      background: #f0f4f8;
+      border-bottom: 1px solid #dce3ea;
+      margin-bottom: 0;
+      min-height: 50px;
     }
-    .next-phase-buttons button {
-      font-size: 11px;
-      padding: 2px 6px;
-      margin-left: 4px;
-      border-radius: 12px;
-      border: 1px solid #90caf9;
-      background: #e3f2fd;
+    .phase-nav-btn {
+      font-size: 14px;
+      padding: 9px 20px;
+      border-radius: 22px;
+      border: none;
       cursor: pointer;
+      font-weight: bold;
+      min-width: 150px;
+      white-space: nowrap;
     }
+    .phase-nav-back {
+      background: #e0e0e0;
+      color: #333;
+    }
+    .phase-nav-back:hover { background: #bdbdbd; }
+    .phase-nav-forward {
+      background: #1976d2;
+      color: #fff;
+    }
+    .phase-nav-forward:hover { background: #1565c0; }
+    .phase-nav-current {
+      font-size: 17px;
+      font-weight: bold;
+      color: #1a237e;
+      flex: 1;
+      text-align: center;
+    }
+    .phase-nav-spacer { min-width: 150px; }
 
     /* 先生ビュー簡略 */
     #teacher-left {
@@ -1397,11 +1434,9 @@
                        margin-top:4px; display:block;"></span>
         </div>
 
-        <!-- テキストメモ（折りたたみ） -->
-        <div class="left-section">
-          <div class="left-section-title"
-               style="cursor:pointer;"
-               onclick="toggleMemo()">
+        <!-- テキストメモ（非表示・機能は維持） -->
+        <div class="left-section" style="display:none;">
+          <div class="left-section-title" style="cursor:pointer;" onclick="toggleMemo()">
             📝 メモを見る / 編集する ▾
           </div>
           <div id="memoArea" style="display:none;">
@@ -1414,11 +1449,10 @@
           </div>
         </div>
 
-        <!-- AI抽出セクション -->
-        <div class="left-section">
+        <!-- AI手動抽出（非表示・機能は維持） -->
+        <div class="left-section" id="aiKeywordSection" style="display:none;">
           <div class="left-section-title">✨ 言葉を選ぶ</div>
-          <button id="aiKeywordBtn" class="btn-primary"
-                  style="width:100%;">
+          <button id="aiKeywordBtn" class="btn-primary" style="width:100%;">
             AIでキーワードを抽出する
           </button>
           <span id="aiKeywordStatus"
@@ -1503,31 +1537,41 @@
 
           <div id="canvas-pan-area">
           <div id="canvas" class="layout-saguru-kizuku">
-            <!-- さぐる・きづく -->
-            <div id="area-target" class="area">
-              <div class="area-label"><span class="icon">🎯</span>ターゲット</div>
-              <div class="area-hint">誰の困りごとを考えている？（例：お母さん、中学生など）</div>
+            <!-- さぐる（上段） -->
+            <div id="area-persona" class="area">
+              <div class="area-label"><span class="icon">🧑</span>ペルソナを決めよう</div>
+              <div class="area-hint">「量子力学を伝える相手」を1人、妄想で決めてください（例：中学2年生、理科は好きだけど数式は苦手、宇宙や不思議な話には興味がある）</div>
             </div>
-            <div id="area-fact" class="area">
-              <div class="area-label"><span class="icon">📌</span>インタビュー・行動観察（事実）</div>
-              <div class="area-hint">実際の発言や様子のカードを貼る。</div>
+            <div id="area-current-image" class="area">
+              <div class="area-label"><span class="icon">💭</span>今のイメージ・知識</div>
+              <div class="area-hint">そのペルソナが今、量子力学に対してどんなイメージ・知識を持っていそうか（例：「聞いたことはあるけど難しそう」）</div>
             </div>
-            <div id="area-wish" class="area">
-              <div class="area-label"><span class="icon">❓</span>本当の願いごと・困りごと</div>
-              <div class="area-hint">※ 一行の問いにまとめる欄。カードをヒントに自分の言葉で書く。</div>
+            <div id="area-scene" class="area">
+              <div class="area-label"><span class="icon">🎬</span>どんな場面で触れそうか</div>
+              <div class="area-hint">そのペルソナがどんな場面で量子力学に触れそうか（例：理科の授業、SF映画、ニュース）</div>
+            </div>
+
+            <!-- きづく（下段） -->
+            <div id="area-confusion" class="area">
+              <div class="area-label"><span class="icon">🤔</span>迷いそうなポイント</div>
+              <div class="area-hint">ペルソナが量子力学の何につまずきそうか（具体的な用語・概念）</div>
+            </div>
+            <div id="area-why-but" class="area">
+              <div class="area-label"><span class="icon">🧩</span>なぜなら／でも・じつは</div>
+              <div class="area-hint">「〇〇を知りたい　なぜなら〇〇」「でも／じつは〇〇」という形で深掘りしてみましょう</div>
+            </div>
+            <div id="area-insight" class="area">
+              <div class="area-label"><span class="icon">💡</span>インサイト（一行）</div>
+              <div class="area-hint">ペルソナの本当の困りごと・知りたいことを1文にまとめてください</div>
               <input id="coreProblemInput" type="text"
-                     placeholder="例：どうすれば、〜できるだろうか？"
+                     placeholder="例：どうすれば、中学生にも量子力学の面白さを感じてもらえるだろうか？"
                      style="width:100%; margin-top:4px; font-size:12px; padding:4px 6px; box-sizing:border-box;" />
-            </div>
-            <div id="area-interpret" class="area">
-              <div class="area-label"><span class="icon">🧩</span>願いごと・困りごと（解釈）</div>
-              <div class="area-hint">「〜なのかも」「〜だからかも」と感じたことのカードを貼る。</div>
             </div>
 
             <!-- ひらめく -->
             <div id="hirameku-core" class="area" style="display:none;">
-              <div class="area-label"><span class="icon">🎯</span>ターゲットの本当の課題</div>
-              <div class="area-hint">さぐる・きづくフェーズで決めた問いをここに置く。</div>
+              <div class="area-label"><span class="icon">💡</span>ペルソナのインサイト</div>
+              <div class="area-hint">きづくフェーズで決めた一行インサイトをここに置く。</div>
               <div id="hiramekuCoreProblemText"
                    style="margin-top:4px; font-size:12px; padding:4px 6px; background:#fff; border-radius:4px; min-height:18px;"></div>
             </div>
@@ -1550,44 +1594,44 @@
 
             <!-- つくる -->
             <div id="area-idea-name" class="area" style="display:none;">
-              <div class="area-label"><span class="icon">🏷</span>アイデアの名前</div>
-              <div class="area-hint">例：安眠ムードBOX など。</div>
+              <div class="area-label"><span class="icon">🏷</span>伝え方の名前</div>
+              <div class="area-hint">例：量子力学かるた、量子力学クイズ動画 など</div>
             </div>
             <div id="area-core-problem" class="area" style="display:none;">
-              <div class="area-label"><span class="icon">🎯</span>ターゲットの本当の課題</div>
-              <div class="area-hint">発表まとめや前のフェーズと同じ問いを表示。</div>
+              <div class="area-label"><span class="icon">💡</span>ペルソナのインサイト</div>
+              <div class="area-hint">きづくフェーズで決めたインサイトを表示。</div>
               <div id="coreProblemDisplay"
                    style="margin-top:4px; font-size:12px; padding:4px 6px; background:#fff; border-radius:4px; min-height:18px;"></div>
             </div>
             <div id="area-look" class="area" style="display:none;">
-              <div class="area-label"><span class="icon">👀</span>見た目</div>
-              <div class="area-hint">形・色・雰囲気などのカード。</div>
+              <div class="area-label"><span class="icon">👀</span>見た目・雰囲気</div>
+              <div class="area-hint">動画？ゲーム？実験？どんな見た目・形になりそうか</div>
             </div>
             <div id="area-size" class="area" style="display:none;">
-              <div class="area-label"><span class="icon">📏</span>大きさ</div>
-              <div class="area-hint">どれくらいの大きさか・持ち運びやすさなど。</div>
+              <div class="area-label"><span class="icon">📏</span>尺・ボリューム</div>
+              <div class="area-hint">どれくらいの長さ・分量で伝えるか（例：3分動画、5問クイズ）</div>
             </div>
             <div id="area-function" class="area" style="display:none;">
-              <div class="area-label"><span class="icon">⚙️</span>機能</div>
-              <div class="area-hint">どんな機能で課題を解決するか。</div>
+              <div class="area-label"><span class="icon">⚙️</span>伝える工夫</div>
+              <div class="area-hint">量子力学のどの部分を，どう工夫して伝えるか</div>
             </div>
             <div id="area-feature" class="area" style="display:none;">
-              <div class="area-label"><span class="icon">⭐</span>特徴・こだわり</div>
-              <div class="area-hint">他と違うポイント・工夫した点。</div>
+              <div class="area-label"><span class="icon">⭐</span>こだわりポイント</div>
+              <div class="area-hint">他と違う，面白いと思ってもらえそうな工夫</div>
             </div>
 
             <!-- ためす -->
             <div id="area-good" class="area" style="display:none;">
               <div class="area-label"><span class="icon">👍</span>良かったところ</div>
-              <div class="area-hint">ユーザーにほめられた点・うまくいった点。</div>
+              <div class="area-hint">友達に見せてみて，「わかりやすい」「面白い」と言われた点</div>
             </div>
             <div id="area-better" class="area" style="display:none;">
               <div class="area-label"><span class="icon">🔧</span>もっとこうだったら良いところ</div>
-              <div class="area-hint">改善のアイデアや指摘のカード。</div>
+              <div class="area-hint">「ここが伝わりにくかった」と言われた点，改善のアイデア</div>
             </div>
             <div id="area-next" class="area" style="display:none;">
               <div class="area-label"><span class="icon">➡️</span>次に取り組むこと</div>
-              <div class="area-hint">次のサイクルで試したい一歩。</div>
+              <div class="area-hint">もう一度作り直すなら，次にやってみたいこと</div>
             </div>
 
             <!-- ===== 議事録テンプレート ===== -->
@@ -1893,11 +1937,11 @@ const nextPhaseButtons = document.getElementById("nextPhaseButtons");
 
 // フェーズ説明・おすすめ遷移
 const phaseDescriptions = {
-  saguru: "さぐる：ターゲットと現状の困りごと・観察をワークシートに整理します（6〜10枚程度）。",
-  kizuku: "きづく：本当に解きたい問題・問いを絞り込みます（3〜5枚程度）。",
-  hirameku: "ひらめく：ターゲットの本当の課題を中心に、解決アイデアを多めに出します（8〜12枚程度）。",
-  tsukuru: "つくる：選んだアイデアの見た目・大きさ・機能・特徴を整理します（3〜7枚程度）。",
-  tamesu: "ためす：良かった点／もっと良くできそうな点／次にすることをカードで残します（4〜6枚程度）。"
+  saguru: "さぐる：ペルソナを妄想で決め、今のイメージ・触れる場面をカードで整理します（4〜8枚程度）。",
+  kizuku: "きづく：ペルソナがつまずきそうな点を深掘りし、インサイト（一行）にまとめます（4〜6枚程度）。",
+  hirameku: "ひらめく：ペルソナのインサイトを中心に、伝え方のアイデアを多めに出します（8〜12枚程度）。",
+  tsukuru: "つくる：選んだ伝え方の見た目・ボリューム・工夫・こだわりを整理します（3〜7枚程度）。",
+  tamesu: "ためす：良かった点／伝わりにくかった点／次に試したいことをカードで残します（4〜6枚程度）。"
 };
 const nextPhaseOptions = {
   saguru:  { forward: "kizuku",  back: null },
@@ -2037,10 +2081,12 @@ document.getElementById('zoomOutBtn')?.addEventListener('click', () => {
   zoom = Math.max(MIN_ZOOM, zoom / 1.2); applyTransform();
 });
 document.getElementById('zoomFitBtn')?.addEventListener('click', fitCanvas);
-const areaTarget      = document.getElementById("area-target");
-const areaFact        = document.getElementById("area-fact");
-const areaWish        = document.getElementById("area-wish");
-const areaInterpret   = document.getElementById("area-interpret");
+const areaPersona       = document.getElementById("area-persona");
+const areaCurrentImage  = document.getElementById("area-current-image");
+const areaScene         = document.getElementById("area-scene");
+const areaConfusion     = document.getElementById("area-confusion");
+const areaWhyBut        = document.getElementById("area-why-but");
+const areaInsight       = document.getElementById("area-insight");
 const hiramekuCore    = document.getElementById("hirameku-core");
 const ideaSlots = [
   document.getElementById("hirameku-idea-slot-1"),
@@ -2061,7 +2107,7 @@ const areaNext        = document.getElementById("area-next");
 function setWorksheetLayout(phase) {
   layoutClasses.forEach(c => canvasEl.classList.remove(c));
   [
-    areaTarget,areaFact,areaWish,areaInterpret,
+    areaPersona,areaCurrentImage,areaScene,areaConfusion,areaWhyBut,areaInsight,
     hiramekuCore,...ideaSlots,
     areaIdeaName,areaCoreProblem,areaLook,areaSize,areaFunction,areaFeature,
     areaGood,areaBetter,areaNext,
@@ -2088,11 +2134,13 @@ function setWorksheetLayout(phase) {
 
   if (phase==="saguru" || phase==="kizuku") {
     canvasEl.classList.add("layout-saguru-kizuku");
-    if (areaTarget) areaTarget.style.display="block";
-    if (areaFact) areaFact.style.display="block";
-    if (areaWish) areaWish.style.display="block";
-    if (areaInterpret) areaInterpret.style.display="block";
-    worksheetPhaseLabel.textContent = "ワークシート：さぐる・気づく・たてる";
+    if (areaPersona)      areaPersona.style.display="block";
+    if (areaCurrentImage) areaCurrentImage.style.display="block";
+    if (areaScene)        areaScene.style.display="block";
+    if (areaConfusion)    areaConfusion.style.display="block";
+    if (areaWhyBut)       areaWhyBut.style.display="block";
+    if (areaInsight)      areaInsight.style.display="block";
+    worksheetPhaseLabel.textContent = "ワークシート：さぐる・きづく";
   } else if (phase==="hirameku") {
     canvasEl.classList.add("layout-hirameku");
     if (hiramekuCore) hiramekuCore.style.display="block";
@@ -2171,20 +2219,37 @@ function updateNextPhaseButtons() {
   const cfg = nextPhaseOptions[currentPhase];
   nextPhaseButtons.innerHTML = "";
   if (!cfg) return;
-  const span = document.createElement("span");
-  span.textContent = "▶ 次の一歩（例）：";
-  nextPhaseButtons.appendChild(span);
-  if (cfg.forward) {
-    const bF = document.createElement("button");
-    bF.textContent = "次へ：「" + phaseLabel(cfg.forward) + "」";
-    bF.onclick = () => changePhase(cfg.forward);
-    nextPhaseButtons.appendChild(bF);
-  }
+
+  // 戻るボタン（左）
   if (cfg.back) {
     const bB = document.createElement("button");
-    bB.textContent = "戻る：「" + phaseLabel(cfg.back) + "」";
+    bB.className = "phase-nav-btn phase-nav-back";
+    bB.textContent = "← 戻る：" + phaseLabel(cfg.back);
     bB.onclick = () => changePhase(cfg.back);
     nextPhaseButtons.appendChild(bB);
+  } else {
+    const sp = document.createElement("div");
+    sp.className = "phase-nav-spacer";
+    nextPhaseButtons.appendChild(sp);
+  }
+
+  // 現在フェーズ（中央）
+  const cur = document.createElement("div");
+  cur.className = "phase-nav-current";
+  cur.textContent = phaseLabel(currentPhase);
+  nextPhaseButtons.appendChild(cur);
+
+  // 次へボタン（右）
+  if (cfg.forward) {
+    const bF = document.createElement("button");
+    bF.className = "phase-nav-btn phase-nav-forward";
+    bF.textContent = "次へ：" + phaseLabel(cfg.forward) + " →";
+    bF.onclick = () => changePhase(cfg.forward);
+    nextPhaseButtons.appendChild(bF);
+  } else {
+    const sp = document.createElement("div");
+    sp.className = "phase-nav-spacer";
+    nextPhaseButtons.appendChild(sp);
   }
 }
 
@@ -2207,10 +2272,9 @@ function changePhase(newPhase) {
 }
 
 function applyAiSupportMode() {
-  const supported = window.aiSupport !== false;
-  // AI抽出セクション（支援なし条件では非表示）
-  const aiSection = document.querySelector('#aiKeywordBtn')?.closest('.left-section');
-  if (aiSection) aiSection.style.display = supported ? '' : 'none';
+  // AI手動抽出ボタンは常時非表示（バックグラウンド処理は動作継続）
+  const aiSection = document.getElementById('aiKeywordSection');
+  if (aiSection) aiSection.style.display = 'none';
   // リアルタイム配置セクションは常に非表示（自動配置を無効化）
   const realtimeSec = document.getElementById('realtimeSection');
   if (realtimeSec) realtimeSec.style.display = 'none';
