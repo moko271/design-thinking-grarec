@@ -406,6 +406,26 @@
       color: #555;
       white-space: nowrap;
     }
+    #group-badge {
+      display: none;
+      align-items: center;
+      background: #1565c0;
+      color: #fff;
+      font-size: 18px;
+      font-weight: bold;
+      padding: 3px 14px;
+      border-radius: 20px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    #operator-name-input {
+      font-size: 13px;
+      padding: 4px 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      width: 120px;
+      color: #333;
+    }
 
     #canvas {
       width: 2000px;
@@ -542,7 +562,7 @@
       padding: 4px 12px;
       border-radius: 4px 4px 0 0;
       font-weight: bold;
-      font-size: 18px;
+      font-size: 20px;
       display: flex;
       align-items: center;
       gap: 5px;
@@ -550,7 +570,7 @@
       box-shadow: 0 -1px 3px rgba(0,0,0,0.06);
     }
     .area-label span.icon {
-      font-size: 20px;
+      font-size: 22px;
     }
     .area-hint {
       font-size: 12px;
@@ -1527,6 +1547,11 @@
             <div id="canvas-title-block">
               <span>タイトル：</span>
               <input id="topicInput" type="text" placeholder="話し合い／プロジェクトのタイトルを書く" />
+              <span id="group-badge"></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+              <label style="font-size:12px; color:#666; white-space:nowrap;">記入者：</label>
+              <input id="operator-name-input" type="text" placeholder="名前（任意）" />
             </div>
             <div id="worksheet-phase-label">
               ワークシート：さぐる・気づく・たてる
@@ -1565,7 +1590,7 @@
               <div class="area-hint">ペルソナの本当の困りごと・知りたいことを1文にまとめてください</div>
               <input id="coreProblemInput" type="text"
                      placeholder="例：どうすれば、中学生にも量子力学の面白さを感じてもらえるだろうか？"
-                     style="width:100%; margin-top:4px; font-size:12px; padding:4px 6px; box-sizing:border-box;" />
+                     style="width:100%; margin-top:6px; font-size:17px; padding:8px 10px; box-sizing:border-box; border-radius:4px; border:1px solid #90caf9; font-weight:bold;" />
             </div>
 
             <!-- ひらめく -->
@@ -1573,7 +1598,7 @@
               <div class="area-label"><span class="icon">💡</span>ペルソナのインサイト</div>
               <div class="area-hint">きづくフェーズで決めた一行インサイトをここに置く。</div>
               <div id="hiramekuCoreProblemText"
-                   style="margin-top:4px; font-size:12px; padding:4px 6px; background:#fff; border-radius:4px; min-height:18px;"></div>
+                   style="margin-top:6px; font-size:17px; font-weight:bold; padding:8px 10px; background:#fff; border-radius:4px; min-height:28px; color:#1a237e;"></div>
             </div>
             <div id="hirameku-idea-slot-1" class="idea-slot" style="display:none;">
               <div class="area-label"><span class="icon">💡</span>アイデア</div>
@@ -1601,7 +1626,7 @@
               <div class="area-label"><span class="icon">💡</span>ペルソナのインサイト</div>
               <div class="area-hint">きづくフェーズで決めたインサイトを表示。</div>
               <div id="coreProblemDisplay"
-                   style="margin-top:4px; font-size:12px; padding:4px 6px; background:#fff; border-radius:4px; min-height:18px;"></div>
+                   style="margin-top:6px; font-size:17px; font-weight:bold; padding:8px 10px; background:#fff; border-radius:4px; min-height:28px; color:#1a237e;"></div>
             </div>
             <div id="area-look" class="area" style="display:none;">
               <div class="area-label"><span class="icon">👀</span>見た目・雰囲気</div>
@@ -2306,6 +2331,19 @@ const addKeywordBtn = document.getElementById("addKeywordBtn");
 
 document.getElementById('topicInput')?.addEventListener('input', saveSession);
 document.getElementById('rawMemo')?.addEventListener('input', saveSession);
+document.getElementById('operator-name-input')?.addEventListener('input', saveSession);
+
+function updateGroupBadge() {
+  const badge = document.getElementById('group-badge');
+  if (!badge) return;
+  const num = window.groupNumber;
+  if (num) {
+    badge.textContent = num + '班';
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
 
 addKeywordBtn.onclick = () => {
   const text = keywordInput.value.trim();
@@ -3075,6 +3113,7 @@ function saveSession() {
   const session = {
     session_id:     window.sessionId     || '',
     group_number:   window.groupNumber   || '',
+    operator_name:  document.getElementById('operator-name-input')?.value || '',
     title:          document.getElementById('topicInput')?.value || '',
     phase:          currentPhase   || '',
     template:       currentTemplate || '',
@@ -3121,6 +3160,7 @@ function saveToServer() {
     const payload = {
       session_id:     window.sessionId,
       group_number:   window.groupNumber   || '',
+      operator_name:  document.getElementById('operator-name-input')?.value || '',
       title:          document.getElementById('topicInput')?.value || '',
       phase:          currentPhase   || '',
       template:       currentTemplate || '',
@@ -3281,6 +3321,7 @@ function saveToProject() {
     document.getElementById('quantumModal').classList.add('hidden');
     document.getElementById('topicInput').value = QUANTUM_TITLE;
     window.quantumMode = true;
+    updateGroupBadge();
 
     if (_quantumProjectData) {
       // プロジェクトデータを復元（AI支援設定は今回選んだものを使用）
@@ -3302,8 +3343,11 @@ function restoreSession(data) {
   try {
     const topicInput = document.getElementById('topicInput');
     const rawMemo = document.getElementById('rawMemo');
+    const operatorInput = document.getElementById('operator-name-input');
     if (topicInput && data.title) topicInput.value = data.title;
     if (rawMemo && data.memo) rawMemo.value = data.memo;
+    if (operatorInput && data.operator_name) operatorInput.value = data.operator_name;
+    if (data.group_number) { window.groupNumber = data.group_number; updateGroupBadge(); }
     window.aiSupport = data.aiSupport !== undefined ? data.aiSupport : true;
     changePhase(data.phase || 'saguru');
     if (data.template) currentTemplate = data.template;
