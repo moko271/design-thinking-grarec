@@ -1,10 +1,12 @@
 import os
+import io
 import shutil
 import tempfile
 import json
 import base64
 import re
 import math
+import zipfile
 import subprocess
 import traceback
 from datetime import datetime
@@ -550,6 +552,8 @@ def transcribe_with_speakers():
 
     audio_file = request.files["audio"]
     suffix = os.path.splitext(audio_file.filename)[1] or ".webm"
+    raw_sid = request.form.get("session_id", "")
+    safe_sid = re.sub(r'[^\w\-]', '_', raw_sid, flags=re.UNICODE)[:40] if raw_sid else ""
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp_path = tmp.name
@@ -572,10 +576,13 @@ def transcribe_with_speakers():
     finally:
         try:
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            rec_name = f"rec_{ts}{suffix}"
-            shutil.copy2(tmp_path, os.path.join(RECORDINGS_DIR, rec_name))
+            sid_part = f"_{safe_sid}" if safe_sid else ""
+            rec_name = f"rec{sid_part}_{ts}{suffix}"
+            dest = os.path.join(RECORDINGS_DIR, rec_name)
+            shutil.copy2(tmp_path, dest)
+            print(f"録音ファイル保存: {dest}")
         except Exception as _e:
-            print(f"Warning: 録音ファイル保存失敗: {_e}")
+            print(f"ERROR: 録音ファイル保存失敗: {_e} | RECORDINGS_DIR={RECORDINGS_DIR}")
         try:
             os.remove(tmp_path)
         except OSError:
@@ -910,6 +917,100 @@ def serve_timelapse_img(session_id, filename):
     return send_from_directory(session_dir, filename)
 
 
+@app.route("/api/download_timelapse_zip/<path:session_id>", methods=["GET"])
+@require_admin
+def download_timelapse_zip(session_id):
+    """セッションのタイムラプス画像をまとめてZIPでダウンロード"""
+    safe_id = re.sub(r'[^\w\-]', '_', session_id, flags=re.UNICODE)[:80]
+    session_dir = os.path.join(TIMELAPSE_DIR, safe_id)
+    if not os.path.isdir(session_dir):
+        return jsonify({"ok": False, "error": "タイムラプスデータがありません"}), 404
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for fname in sorted(os.listdir(session_dir)):
+            if fname.endswith('.png'):
+                zf.write(os.path.join(session_dir, fname), fname)
+    buf.seek(0)
+    zip_name = f"timelapse_{safe_id}.zip"
+    return Response(
+        buf.read(),
+        mimetype="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_name}"'}
+    )
+
+
+@app.route("/api/list_recordings", methods=["GET"])
+@require_admin
+def list_recordings():
+    """録音ファイル一覧を返す（session_id クエリで絞り込み可）"""
+    sid_filter = request.args.get("session_id", "")
+    safe_filter = re.sub(r'[^\w\-]', '_', sid_filter, flags=re.UNICODE)[:40] if sid_filter else ""
+    try:
+        files = []
+        for fname in sorted(os.listdir(RECORDINGS_DIR), reverse=True):
+            if not (fname.endswith('.webm') or fname.endswith('.ogg') or fname.endswith('.wav') or fname.endswith('.mp4')):
+                continue
+            if safe_filter and safe_filter not in fname:
+                continue
+            fpath = os.path.join(RECORDINGS_DIR, fname)
+            size_kb = round(os.path.getsize(fpath) / 1024)
+            files.append({
+                "filename": fname,
+                "size_kb": size_kb,
+                "url": f"/api/download_recording/{fname}"
+            })
+        return jsonify({"ok": True, "files": files, "dir": RECORDINGS_DIR})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/download_recording/<filename>", methods=["GET"])
+@require_admin
+def download_recording(filename):
+    """録音ファイルを個別にダウンロード"""
+    if '/' in filename or '..' in filename:
+        return jsonify({"ok": False}), 400
+    allowed_ext = ('.webm', '.ogg', '.wav', '.mp4', '.m4a')
+    if not any(filename.endswith(e) for e in allowed_ext):
+        return jsonify({"ok": False}), 400
+    return send_from_directory(RECORDINGS_DIR, filename, as_attachment=True)
+
+
+@app.route("/api/download_all_zip", methods=["GET"])
+@require_admin
+def download_all_zip():
+    """全データ（セッション JSON + タイムラプス + 録音）をZIPで一括ダウンロード"""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        # セッション JSON
+        if os.path.isdir(SESSIONS_DIR):
+            for fname in sorted(os.listdir(SESSIONS_DIR)):
+                if fname.endswith('.json'):
+                    zf.write(os.path.join(SESSIONS_DIR, fname), f"sessions/{fname}")
+        # タイムラプス画像
+        if os.path.isdir(TIMELAPSE_DIR):
+            for sid in sorted(os.listdir(TIMELAPSE_DIR)):
+                sid_path = os.path.join(TIMELAPSE_DIR, sid)
+                if os.path.isdir(sid_path):
+                    for fname in sorted(os.listdir(sid_path)):
+                        if fname.endswith('.png'):
+                            zf.write(os.path.join(sid_path, fname), f"timelapse/{sid}/{fname}")
+        # 録音ファイル
+        if os.path.isdir(RECORDINGS_DIR):
+            for fname in sorted(os.listdir(RECORDINGS_DIR)):
+                fpath = os.path.join(RECORDINGS_DIR, fname)
+                if os.path.isfile(fpath):
+                    zf.write(fpath, f"recordings/{fname}")
+    buf.seek(0)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return Response(
+        buf.read(),
+        mimetype="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="grarec_all_{ts}.zip"'}
+    )
+
+
 @app.route("/api/generate_custom_areas", methods=["POST"])
 def generate_custom_areas():
     data = request.get_json()
@@ -995,6 +1096,8 @@ def transcribe_chunk():
     chunk_start = float(request.form.get("chunk_start", 0))
     chunk_end   = float(request.form.get("chunk_end", 300))
     suffix = os.path.splitext(audio_file.filename)[1] or ".webm"
+    raw_sid = request.form.get("session_id", "")
+    safe_sid = re.sub(r'[^\w\-]', '_', raw_sid, flags=re.UNICODE)[:40] if raw_sid else ""
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp_path = tmp.name
@@ -1037,10 +1140,13 @@ def transcribe_chunk():
         try:
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             start_sec = int(chunk_start)
-            rec_name = f"chunk_{ts}_{start_sec}s{suffix}"
-            shutil.copy2(tmp_path, os.path.join(RECORDINGS_DIR, rec_name))
+            sid_part = f"_{safe_sid}" if safe_sid else ""
+            rec_name = f"chunk{sid_part}_{ts}_{start_sec}s{suffix}"
+            dest = os.path.join(RECORDINGS_DIR, rec_name)
+            shutil.copy2(tmp_path, dest)
+            print(f"録音チャンク保存: {dest}")
         except Exception as _e:
-            print(f"Warning: 録音チャンクファイル保存失敗: {_e}")
+            print(f"ERROR: 録音チャンクファイル保存失敗: {_e} | RECORDINGS_DIR={RECORDINGS_DIR}")
         try:
             os.remove(tmp_path)
         except OSError:

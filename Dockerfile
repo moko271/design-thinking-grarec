@@ -18,6 +18,8 @@ COPY . .
 
 # Renderは環境変数PORTでポートを指定してくる
 ENV PORT=10000
+# 永続ディスクのマウントパスに合わせる（Render disk は /data にマウント）
+ENV DATA_DIR=/data
 EXPOSE 10000
 
 # Gunicornで起動（本番用サーバー）

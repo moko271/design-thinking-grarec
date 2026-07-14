@@ -89,6 +89,20 @@
   <span>管理画面 — セッション一覧</span>
 </header>
 <main>
+  <!-- 一括ダウンロード -->
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;padding:14px 18px;background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.07);">
+    <strong style="font-size:13px;">一括ダウンロード：</strong>
+    <a href="/api/download_all_zip" style="text-decoration:none;">
+      <button class="reload-btn" style="background:#1565c0;color:#fff;padding:6px 14px;">
+        📦 全データをZIPでダウンロード
+      </button>
+    </a>
+    <button class="reload-btn" style="background:#37474f;color:#fff;padding:6px 14px;" onclick="showRecordings()">
+      🎙 録音ファイル一覧
+    </button>
+    <span style="font-size:11px;color:#888;">セッションJSON・タイムラプス・録音ファイルをまとめてダウンロードします</span>
+  </div>
+
   <h2>
     保存済みセッション
     <button class="reload-btn" onclick="loadSessions()">↺ 更新</button>
@@ -292,6 +306,12 @@ async function loadSessions() {
           ／
           <button class="del-btn" style="background:#1565c0;color:#fff;" data-sid="${esc(s.session_id)}" onclick="showTimelapse(this, event)">タイムラプス</button>
           ／
+          <a href="/api/download_timelapse_zip/${encodeURIComponent(s.session_id)}" onclick="event.stopPropagation()">
+            <button class="del-btn" style="background:#1976d2;color:#fff;">ZIP</button>
+          </a>
+          ／
+          <button class="del-btn" style="background:#37474f;color:#fff;" data-sid="${esc(s.session_id)}" onclick="showRecordingsForSession(this, event)">録音</button>
+          ／
           <button class="del-btn" data-sid="${esc(s.session_id)}" onclick="deleteSession(this, event)">削除</button>
         </td>`;
       tbody.appendChild(tr);
@@ -372,6 +392,66 @@ async function showTimelapse(btn, event) {
       </div>`).join('');
   } catch(e) {
     grid.innerHTML = `<div style="padding:16px;color:red;">エラー: ${e.message}</div>`;
+  }
+}
+
+// ===== 録音ファイル一覧 =====
+async function showRecordings() {
+  const modal = document.getElementById('recordings-modal');
+  const list  = document.getElementById('recordings-list');
+  document.getElementById('recordings-title').textContent = '録音ファイル一覧';
+  list.innerHTML = '<div style="padding:12px;color:#888;">読み込み中…</div>';
+  modal.style.display = 'flex';
+  try {
+    const res  = await fetch('/api/list_recordings');
+    if (res.status === 401) { alert('認証エラー'); return; }
+    const data = await res.json();
+    if (!data.ok) { list.innerHTML = `<div style="color:red;">${data.error}</div>`; return; }
+    if (!data.files.length) {
+      list.innerHTML = `<div style="padding:12px;color:#888;">録音ファイルがまだありません。<br><small>保存先: ${data.dir || '—'}</small></div>`;
+      return;
+    }
+    list.innerHTML = `<div style="font-size:11px;color:#888;margin-bottom:8px;">保存先: ${data.dir || '—'}</div>` +
+      data.files.map(f => `
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #eef0f4;">
+          <span style="flex:1;font-size:12px;word-break:break-all;">${f.filename}</span>
+          <span style="font-size:11px;color:#888;white-space:nowrap;">${f.size_kb} KB</span>
+          <a href="${f.url}" download style="text-decoration:none;">
+            <button style="font-size:11px;padding:3px 10px;background:#1565c0;color:#fff;border:none;border-radius:4px;cursor:pointer;">DL</button>
+          </a>
+        </div>`).join('');
+  } catch(e) {
+    list.innerHTML = `<div style="color:red;">エラー: ${e.message}</div>`;
+  }
+}
+
+async function showRecordingsForSession(btn, event) {
+  event.stopPropagation();
+  const sid = btn.dataset.sid;
+  const modal = document.getElementById('recordings-modal');
+  const list  = document.getElementById('recordings-list');
+  document.getElementById('recordings-title').textContent = `録音: ${sid}`;
+  list.innerHTML = '<div style="padding:12px;color:#888;">読み込み中…</div>';
+  modal.style.display = 'flex';
+  try {
+    const res  = await fetch(`/api/list_recordings?session_id=${encodeURIComponent(sid)}`);
+    if (res.status === 401) { alert('認証エラー'); return; }
+    const data = await res.json();
+    if (!data.ok) { list.innerHTML = `<div style="color:red;">${data.error}</div>`; return; }
+    if (!data.files.length) {
+      list.innerHTML = '<div style="padding:12px;color:#888;">このセッションの録音ファイルがまだありません。<br><small>（録音開始後に自動保存されます）</small></div>';
+      return;
+    }
+    list.innerHTML = data.files.map(f => `
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #eef0f4;">
+        <span style="flex:1;font-size:12px;word-break:break-all;">${f.filename}</span>
+        <span style="font-size:11px;color:#888;white-space:nowrap;">${f.size_kb} KB</span>
+        <a href="${f.url}" download style="text-decoration:none;">
+          <button style="font-size:11px;padding:3px 10px;background:#1565c0;color:#fff;border:none;border-radius:4px;cursor:pointer;">DL</button>
+        </a>
+      </div>`).join('');
+  } catch(e) {
+    list.innerHTML = `<div style="color:red;">エラー: ${e.message}</div>`;
   }
 }
 
@@ -467,6 +547,17 @@ loadProjects();
       <button onclick="document.getElementById('timelapse-modal').style.display='none'" style="border:none;background:none;font-size:20px;cursor:pointer;color:#555;">✕</button>
     </div>
     <div id="timelapse-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;"></div>
+  </div>
+</div>
+
+<!-- 録音ファイルモーダル -->
+<div id="recordings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:10px;padding:24px;max-width:680px;width:90vw;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <strong id="recordings-title" style="font-size:14px;">録音ファイル一覧</strong>
+      <button onclick="document.getElementById('recordings-modal').style.display='none'" style="border:none;background:none;font-size:20px;cursor:pointer;color:#555;">✕</button>
+    </div>
+    <div id="recordings-list"></div>
   </div>
 </div>
 </body>

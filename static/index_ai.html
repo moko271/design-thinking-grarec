@@ -2915,6 +2915,7 @@ startRecordBtn.onclick = async () => {
       try {
         const formData = new FormData();
         formData.append("audio", blob, "recorded.webm");
+        formData.append("session_id", window.sessionId || "");
         const res = await fetchWithRetry("/api/transcribe_with_speakers", {
           method: "POST",
           body: formData,
