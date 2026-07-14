@@ -23,4 +23,4 @@ EXPOSE 10000
 # Gunicornで起動（本番用サーバー）
 # --timeout 300: 音声処理は時間がかかるため長めに設定
 # --workers 2: メモリ消費とのバランスを見て調整可能
-CMD gunicorn -w 2 --threads 2 --timeout 300 -b 0.0.0.0:$PORT app:app
+CMD gunicorn -w 1 --threads 4 --timeout 300 -b 0.0.0.0:$PORT app:app
