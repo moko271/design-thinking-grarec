@@ -452,38 +452,61 @@
       overflow: visible;
     }
 
-    /* さぐる・きづく（6エリア 2行×3列） */
-    /* 上段：さぐるグループ */
-    .layout-saguru-kizuku #area-persona {
-      top: 4px; left: 2%; width: 29%; height: 44%;
+    /* さぐるフェーズ（3エリア 横並び・フル高さ） */
+    .layout-saguru #area-persona {
+      top: 4px; left: 2%; width: 29%; bottom: 4px;
       border-color: #9c27b0;
       background: rgba(243, 229, 245, 0.9);
     }
-    .layout-saguru-kizuku #area-current-image {
-      top: 4px; left: 34%; width: 29%; height: 44%;
+    .layout-saguru #area-current-image {
+      top: 4px; left: 34%; width: 29%; bottom: 4px;
       border-color: #4caf50;
       background: rgba(232, 245, 233, 0.9);
     }
-    .layout-saguru-kizuku #area-scene {
-      top: 4px; left: 66%; right: 2%; height: 44%;
+    .layout-saguru #area-scene {
+      top: 4px; left: 66%; right: 2%; bottom: 4px;
       border-color: #3f51b5;
       background: rgba(232, 234, 246, 0.9);
     }
-    /* 下段：きづくグループ */
-    .layout-saguru-kizuku #area-confusion {
-      top: 52%; left: 2%; width: 29%; bottom: 4px;
+
+    /* きづくフェーズ（3エリア 横並び・フル高さ） */
+    .layout-kizuku #area-confusion {
+      top: 4px; left: 2%; width: 29%; bottom: 4px;
       border-color: #ff9800;
       background: rgba(255, 243, 224, 0.9);
     }
-    .layout-saguru-kizuku #area-why-but {
-      top: 52%; left: 34%; width: 29%; bottom: 4px;
+    .layout-kizuku #area-why-but {
+      top: 4px; left: 34%; width: 29%; bottom: 4px;
       border-color: #e91e63;
       background: rgba(252, 228, 236, 0.9);
     }
-    .layout-saguru-kizuku #area-insight {
-      top: 52%; left: 66%; right: 2%; bottom: 4px;
+    .layout-kizuku #area-insight {
+      top: 4px; left: 66%; right: 2%; bottom: 4px;
       border-color: #2196f3;
       background: rgba(227, 242, 253, 0.9);
+    }
+
+    /* きづくフェーズ：ペルソナ確認バナー */
+    #kizuku-persona-banner {
+      display: none;
+      padding: 8px 16px;
+      background: #f3e5f5;
+      border-bottom: 1px solid #ce93d8;
+      font-size: 13px;
+      color: #4a148c;
+      flex-shrink: 0;
+    }
+    #kizuku-persona-banner .banner-label {
+      font-weight: bold;
+      margin-right: 4px;
+    }
+    #kizuku-persona-banner .banner-value {
+      font-weight: bold;
+      color: #6a1b9a;
+    }
+    #kizuku-persona-banner .banner-empty {
+      color: #999;
+      font-style: italic;
     }
 
     /* ひらめく */
@@ -1559,13 +1582,19 @@
           </div>
 
           <div class="next-phase-buttons" id="nextPhaseButtons" style="padding:2px 10px;"></div>
+          <div id="kizuku-persona-banner">
+            <span class="banner-label">🧑 あなたが決めたペルソナ：</span><span id="kizuku-persona-text"></span>
+          </div>
 
           <div id="canvas-pan-area">
-          <div id="canvas" class="layout-saguru-kizuku">
-            <!-- さぐる（上段） -->
+          <div id="canvas" class="layout-saguru">
+            <!-- さぐる -->
             <div id="area-persona" class="area">
               <div class="area-label"><span class="icon">🧑</span>ペルソナを決めよう</div>
               <div class="area-hint">「量子力学を伝える相手」を1人、妄想で決めてください（例：中学2年生、理科は好きだけど数式は苦手、宇宙や不思議な話には興味がある）</div>
+              <input id="personaConfirmInput" type="text"
+                     placeholder="例：理科は好きだけど数式は苦手な中学2年生"
+                     style="width:100%; margin-top:6px; font-size:15px; padding:6px 10px; box-sizing:border-box; border-radius:4px; border:1px solid #ce93d8; font-weight:bold;" />
             </div>
             <div id="area-current-image" class="area">
               <div class="area-label"><span class="icon">💭</span>今のイメージ・知識</div>
@@ -1576,20 +1605,20 @@
               <div class="area-hint">そのペルソナがどんな場面で量子力学に触れそうか（例：理科の授業、SF映画、ニュース）</div>
             </div>
 
-            <!-- きづく（下段） -->
-            <div id="area-confusion" class="area">
+            <!-- きづく（初期非表示） -->
+            <div id="area-confusion" class="area" style="display:none;">
               <div class="area-label"><span class="icon">🤔</span>迷いそうなポイント</div>
               <div class="area-hint">ペルソナが量子力学の何につまずきそうか（具体的な用語・概念）</div>
             </div>
-            <div id="area-why-but" class="area">
+            <div id="area-why-but" class="area" style="display:none;">
               <div class="area-label"><span class="icon">🧩</span>なぜなら／でも・じつは</div>
               <div class="area-hint">「〇〇を知りたい　なぜなら〇〇」「でも／じつは〇〇」という形で深掘りしてみましょう</div>
             </div>
-            <div id="area-insight" class="area">
+            <div id="area-insight" class="area" style="display:none;">
               <div class="area-label"><span class="icon">💡</span>インサイト（一行）</div>
               <div class="area-hint">ペルソナの本当の困りごと・知りたいことを1文にまとめてください</div>
               <input id="coreProblemInput" type="text"
-                     placeholder="例：どうすれば、中学生にも量子力学の面白さを感じてもらえるだろうか？"
+                     placeholder="例：どうすれば，電車での移動中にふと量子力学について調べてみたくなるだろうか？"
                      style="width:100%; margin-top:6px; font-size:17px; padding:8px 10px; box-sizing:border-box; border-radius:4px; border:1px solid #90caf9; font-weight:bold;" />
             </div>
 
@@ -1979,7 +2008,7 @@ function phaseLabel(p){
   return {saguru:"①さぐる",kizuku:"②きづく",hirameku:"③ひらめく",tsukuru:"④つくる",tamesu:"⑤ためす"}[p] || p;
 }
 
-// 本当の課題共有
+// インサイト共有（きづく→ひらめく・つくる）
 const coreProblemInput = document.getElementById("coreProblemInput");
 const coreProblemDisplay = document.getElementById("coreProblemDisplay");
 const hiramekuCoreProblemText = document.getElementById("hiramekuCoreProblemText");
@@ -1989,13 +2018,37 @@ if (coreProblemInput) {
     coreProblemText = coreProblemInput.value;
     if (coreProblemDisplay) coreProblemDisplay.textContent = coreProblemText;
     if (hiramekuCoreProblemText) hiramekuCoreProblemText.textContent = coreProblemText;
+    saveSession();
+  });
+}
+
+// ペルソナ確定共有（さぐる→きづく）
+const personaConfirmInput = document.getElementById("personaConfirmInput");
+const kizukuPersonaTextEl = document.getElementById("kizuku-persona-text");
+const kizukuPersonaBanner = document.getElementById("kizuku-persona-banner");
+let personaText = "";
+function updatePersonaBanner() {
+  if (!kizukuPersonaBanner) return;
+  if (personaText) {
+    kizukuPersonaTextEl.className = "banner-value";
+    kizukuPersonaTextEl.textContent = personaText;
+  } else {
+    kizukuPersonaTextEl.className = "banner-empty";
+    kizukuPersonaTextEl.textContent = "ペルソナがまだ決まっていません";
+  }
+}
+if (personaConfirmInput) {
+  personaConfirmInput.addEventListener("input", () => {
+    personaText = personaConfirmInput.value;
+    updatePersonaBanner();
+    saveSession();
   });
 }
 
 // キャンバスレイアウト
 const canvasEl = document.getElementById("canvas");
 const canvasPanArea = document.getElementById('canvas-pan-area');
-const layoutClasses = ["layout-saguru-kizuku","layout-hirameku","layout-tsukuru","layout-tamesu","layout-minutes","layout-interview","layout-custom"];
+const layoutClasses = ["layout-saguru","layout-kizuku","layout-hirameku","layout-tsukuru","layout-tamesu","layout-minutes","layout-interview","layout-custom"];
 
 // ===== 無限キャンバス（パン・ズーム） =====
 let panX = 0, panY = 0, zoom = 1.0;
@@ -2157,17 +2210,24 @@ function setWorksheetLayout(phase) {
     document.getElementById("area-custom-6"),
   ].forEach(el => { if(el) el.style.display="none"; });
 
-  if (phase==="saguru" || phase==="kizuku") {
-    canvasEl.classList.add("layout-saguru-kizuku");
+  if (phase==="saguru") {
+    canvasEl.classList.add("layout-saguru");
     if (areaPersona)      areaPersona.style.display="block";
     if (areaCurrentImage) areaCurrentImage.style.display="block";
     if (areaScene)        areaScene.style.display="block";
+    if (kizukuPersonaBanner) kizukuPersonaBanner.style.display="none";
+    worksheetPhaseLabel.textContent = "ワークシート：①さぐる";
+  } else if (phase==="kizuku") {
+    canvasEl.classList.add("layout-kizuku");
     if (areaConfusion)    areaConfusion.style.display="block";
     if (areaWhyBut)       areaWhyBut.style.display="block";
     if (areaInsight)      areaInsight.style.display="block";
-    worksheetPhaseLabel.textContent = "ワークシート：さぐる・きづく";
+    updatePersonaBanner();
+    if (kizukuPersonaBanner) kizukuPersonaBanner.style.display="block";
+    worksheetPhaseLabel.textContent = "ワークシート：②きづく";
   } else if (phase==="hirameku") {
     canvasEl.classList.add("layout-hirameku");
+    if (kizukuPersonaBanner) kizukuPersonaBanner.style.display="none";
     if (hiramekuCore) hiramekuCore.style.display="block";
     ideaSlots.forEach(el=>{ if(el) el.style.display="block"; });
     const w = canvasEl.clientWidth || 800;
@@ -2179,6 +2239,7 @@ function setWorksheetLayout(phase) {
     ideaSlots[3].style.right = mx+"px";  ideaSlots[3].style.bottom= my+"px"; ideaSlots[3].style.top="";
     worksheetPhaseLabel.textContent = "ワークシート：③ひらめく（アイデア出し）";
   } else if (phase==="tsukuru") {
+    if (kizukuPersonaBanner) kizukuPersonaBanner.style.display="none";
     canvasEl.classList.add("layout-tsukuru");
     if (areaIdeaName) areaIdeaName.style.display="block";
     if (areaCoreProblem) areaCoreProblem.style.display="block";
@@ -2225,6 +2286,7 @@ function setWorksheetLayout(phase) {
   }
 
   if (coreProblemInput) coreProblemInput.value = coreProblemText;
+  if (personaConfirmInput) personaConfirmInput.value = personaText;
   updateNotesVisibility();
 
   // 自動配置セクションは常に非表示（学生が手動でエリアに配置する方針）
@@ -3118,6 +3180,8 @@ function saveSession() {
     phase:          currentPhase   || '',
     template:       currentTemplate || '',
     memo:           document.getElementById('rawMemo')?.value || '',
+    persona_text:   personaText    || '',
+    core_problem:   coreProblemText || '',
     notes,
     speakerSummary: window.speakerSummary || null,
     speakerLabels:  window.speakerLabels  || {},
@@ -3165,6 +3229,8 @@ function saveToServer() {
       phase:          currentPhase   || '',
       template:       currentTemplate || '',
       memo:           document.getElementById('rawMemo')?.value || '',
+      persona_text:   personaText    || '',
+      core_problem:   coreProblemText || '',
       notes,
       speakerSummary: window.speakerSummary || null,
       speakerLabels:  window.speakerLabels  || {},
@@ -3348,6 +3414,17 @@ function restoreSession(data) {
     if (rawMemo && data.memo) rawMemo.value = data.memo;
     if (operatorInput && data.operator_name) operatorInput.value = data.operator_name;
     if (data.group_number) { window.groupNumber = data.group_number; updateGroupBadge(); }
+    if (data.persona_text) {
+      personaText = data.persona_text;
+      if (personaConfirmInput) personaConfirmInput.value = personaText;
+      updatePersonaBanner();
+    }
+    if (data.core_problem) {
+      coreProblemText = data.core_problem;
+      if (coreProblemInput) coreProblemInput.value = coreProblemText;
+      if (coreProblemDisplay) coreProblemDisplay.textContent = coreProblemText;
+      if (hiramekuCoreProblemText) hiramekuCoreProblemText.textContent = coreProblemText;
+    }
     window.aiSupport = data.aiSupport !== undefined ? data.aiSupport : true;
     changePhase(data.phase || 'saguru');
     if (data.template) currentTemplate = data.template;
