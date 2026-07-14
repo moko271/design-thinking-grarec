@@ -35,8 +35,9 @@ DATA_DIR       = os.getenv("DATA_DIR", "data")
 SESSIONS_DIR   = os.getenv("SESSIONS_DIR",   os.path.join(DATA_DIR, "sessions"))
 RECORDINGS_DIR = os.getenv("RECORDINGS_DIR", os.path.join(DATA_DIR, "recordings"))
 PROJECTS_DIR   = os.getenv("PROJECTS_DIR",   os.path.join(DATA_DIR, "projects"))
+TIMELAPSE_DIR  = os.getenv("TIMELAPSE_DIR",  os.path.join(DATA_DIR, "timelapse"))
 
-for _d in (SESSIONS_DIR, RECORDINGS_DIR, PROJECTS_DIR):
+for _d in (SESSIONS_DIR, RECORDINGS_DIR, PROJECTS_DIR, TIMELAPSE_DIR):
     try:
         os.makedirs(_d, exist_ok=True)
     except OSError as _e:
@@ -680,7 +681,7 @@ area-why-but：
 
 area-insight：
   ペルソナの本当の困りごと・知りたいことを一行でまとめたカード
-  例）「どうすれば，電車での移動中にふと量子力学について調べてみたくなるだろうか？」
+  例）「理科が苦手な女子中学生が楽しく量子力学を理解したい」
 
 【判断のポイント】
 ・ペルソナの人物像 → area-persona
@@ -905,6 +906,68 @@ def save_png():
         return jsonify({"ok": False, "error": f"Failed to save file: {e}"}), 500
 
     return jsonify({"ok": True, "filename": filename})
+
+
+# =========================
+# タイムラプス API
+# =========================
+
+@app.route("/api/save_timelapse", methods=["POST"])
+def save_timelapse():
+    """フロントエンドからキャンバスのスクリーンショットを受け取り保存する（認証不要）"""
+    data = request.get_json()
+    if not data:
+        return jsonify({"ok": False, "error": "no data"}), 400
+    session_id = data.get("session_id", "").strip()
+    image_data  = data.get("image", "")
+    if not session_id or not image_data:
+        return jsonify({"ok": False, "error": "session_id and image required"}), 400
+
+    safe_id = re.sub(r'[^\w\-]', '_', session_id, flags=re.UNICODE)[:80]
+    session_dir = os.path.join(TIMELAPSE_DIR, safe_id)
+    os.makedirs(session_dir, exist_ok=True)
+
+    try:
+        if ',' in image_data:
+            image_data = image_data.split(',', 1)[1]
+        img_bytes = base64.b64decode(image_data)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{ts}.png"
+        with open(os.path.join(session_dir, filename), "wb") as f:
+            f.write(img_bytes)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    return jsonify({"ok": True, "filename": filename})
+
+
+@app.route("/api/list_timelapse/<path:session_id>", methods=["GET"])
+@require_admin
+def list_timelapse(session_id):
+    safe_id = re.sub(r'[^\w\-]', '_', session_id, flags=re.UNICODE)[:80]
+    session_dir = os.path.join(TIMELAPSE_DIR, safe_id)
+    if not os.path.isdir(session_dir):
+        return jsonify({"ok": True, "images": []})
+    images = []
+    for f in sorted(os.listdir(session_dir)):
+        if f.endswith('.png'):
+            ts_str = f.replace('.png', '')
+            images.append({
+                "filename": f,
+                "url": f"/api/timelapse_img/{safe_id}/{f}",
+                "timestamp": ts_str
+            })
+    return jsonify({"ok": True, "session_id": session_id, "images": images})
+
+
+@app.route("/api/timelapse_img/<path:session_id>/<filename>")
+@require_admin
+def serve_timelapse_img(session_id, filename):
+    safe_id = re.sub(r'[^\w\-]', '_', session_id, flags=re.UNICODE)[:80]
+    session_dir = os.path.join(TIMELAPSE_DIR, safe_id)
+    if not filename.endswith('.png') or '/' in filename or '..' in filename:
+        return jsonify({"ok": False}), 400
+    return send_from_directory(session_dir, filename)
 
 
 @app.route("/api/generate_custom_areas", methods=["POST"])

@@ -290,6 +290,8 @@ async function loadSessions() {
           ／
           <a href="/?session=${encodeURIComponent(s.session_id)}" target="_blank">GraRec</a>
           ／
+          <button class="del-btn" style="background:#1565c0;color:#fff;" data-sid="${esc(s.session_id)}" onclick="showTimelapse(this, event)">タイムラプス</button>
+          ／
           <button class="del-btn" data-sid="${esc(s.session_id)}" onclick="deleteSession(this, event)">削除</button>
         </td>`;
       tbody.appendChild(tr);
@@ -344,6 +346,34 @@ async function deleteSession(btn, event) {
 }
 
 loadSessions();
+
+// ===== タイムラプス =====
+async function showTimelapse(btn, event) {
+  event.stopPropagation();
+  const sid = btn.dataset.sid;
+  const modal = document.getElementById('timelapse-modal');
+  const grid  = document.getElementById('timelapse-grid');
+  const title = document.getElementById('timelapse-title');
+  title.textContent = `タイムラプス: ${sid}`;
+  grid.innerHTML = '<div style="padding:16px;color:#888;">読み込み中…</div>';
+  modal.style.display = 'flex';
+  try {
+    const res  = await fetch(`/api/list_timelapse/${encodeURIComponent(sid)}`);
+    if (res.status === 401) { alert('認証エラー'); return; }
+    const data = await res.json();
+    if (!data.ok || !data.images.length) {
+      grid.innerHTML = '<div style="padding:16px;color:#888;">スクリーンショットがまだありません。</div>';
+      return;
+    }
+    grid.innerHTML = data.images.map(img => `
+      <div style="text-align:center;">
+        <img src="${img.url}" style="max-width:100%;border-radius:6px;border:1px solid #ddd;" loading="lazy" />
+        <div style="font-size:11px;color:#888;margin-top:4px;">${img.timestamp}</div>
+      </div>`).join('');
+  } catch(e) {
+    grid.innerHTML = `<div style="padding:16px;color:red;">エラー: ${e.message}</div>`;
+  }
+}
 
 // ===== 班別プロジェクト履歴 =====
 async function loadProjects() {
@@ -428,5 +458,16 @@ async function loadProjects() {
 
 loadProjects();
 </script>
+
+<!-- タイムラプスモーダル -->
+<div id="timelapse-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:10px;padding:24px;max-width:90vw;max-height:88vh;overflow-y:auto;min-width:340px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <strong id="timelapse-title" style="font-size:14px;"></strong>
+      <button onclick="document.getElementById('timelapse-modal').style.display='none'" style="border:none;background:none;font-size:20px;cursor:pointer;color:#555;">✕</button>
+    </div>
+    <div id="timelapse-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;"></div>
+  </div>
+</div>
 </body>
 </html>

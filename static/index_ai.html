@@ -510,15 +510,32 @@
     }
 
     /* ひらめく */
-    .layout-hirameku #hirameku-core {
-      top: 35%; left: 30%; right: 30%; height: 30%;
-      border-color: #3f51b5;
-      background: rgba(232, 234, 246, 0.95);
+    /* ひらめくインサイトバナー */
+    #hirameku-insight-banner {
+      display: none;
+      padding: 10px 16px;
+      background: #e8eaf6;
+      border-bottom: 1px solid #9fa8da;
+      font-size: 15px;
+      color: #1a237e;
+      flex-shrink: 0;
     }
+    #hirameku-insight-banner .banner-label {
+      font-weight: bold;
+      margin-right: 4px;
+    }
+    #hirameku-insight-banner .banner-value {
+      font-weight: bold;
+      color: #283593;
+    }
+    #hirameku-insight-banner .banner-empty {
+      color: #999;
+      font-style: italic;
+    }
+
+    /* ひらめくアイデアスロット（2×2グリッド、JSで座標指定） */
     .layout-hirameku .idea-slot {
       position: absolute;
-      width: 22%;
-      height: 26%;
       border: 1px dashed #2196f3;
       background: rgba(227, 242, 253, 0.8);
       box-sizing: border-box;
@@ -630,6 +647,25 @@
       font-weight: bold;
       color: #1a1a1a;
     }
+
+    /* 言及回数バッジ */
+    .mention-badge {
+      position: absolute;
+      top: -9px;
+      right: -9px;
+      background: #e65100;
+      color: #fff;
+      font-size: 10px;
+      font-weight: bold;
+      padding: 2px 5px;
+      border-radius: 10px;
+      z-index: 20;
+      pointer-events: none;
+    }
+    .note[data-mention-count="2"] { outline: 2px solid #f57c00; outline-offset: 1px; }
+    .note[data-mention-count="3"] { outline: 3px solid #d32f2f; outline-offset: 1px; }
+    .note[data-mention-count="4"],
+    .note[data-mention-count-high] { outline: 3px solid #880e4f; outline-offset: 1px; }
 
     .note div.quote {
       display: none;
@@ -1585,6 +1621,9 @@
           <div id="kizuku-persona-banner">
             <span class="banner-label">🧑 あなたが決めたペルソナ：</span><span id="kizuku-persona-text"></span>
           </div>
+          <div id="hirameku-insight-banner">
+            <span class="banner-label">💡 インサイト：</span><span id="hirameku-insight-text"></span>
+          </div>
 
           <div id="canvas-pan-area">
           <div id="canvas" class="layout-saguru">
@@ -1593,7 +1632,7 @@
               <div class="area-label"><span class="icon">🧑</span>ペルソナを決めよう</div>
               <div class="area-hint">「量子力学を伝える相手」を1人、妄想で決めてください（例：中学2年生、理科は好きだけど数式は苦手、宇宙や不思議な話には興味がある）</div>
               <input id="personaConfirmInput" type="text"
-                     placeholder="例：理科は好きだけど数式は苦手な中学2年生"
+                     placeholder="例：理科が苦手な女子中学生"
                      style="width:100%; margin-top:6px; font-size:15px; padding:6px 10px; box-sizing:border-box; border-radius:4px; border:1px solid #ce93d8; font-weight:bold;" />
             </div>
             <div id="area-current-image" class="area">
@@ -1618,7 +1657,7 @@
               <div class="area-label"><span class="icon">💡</span>インサイト（一行）</div>
               <div class="area-hint">ペルソナの本当の困りごと・知りたいことを1文にまとめてください</div>
               <input id="coreProblemInput" type="text"
-                     placeholder="例：どうすれば，電車での移動中にふと量子力学について調べてみたくなるだろうか？"
+                     placeholder="例：理科が苦手な女子中学生が楽しく量子力学を理解したい"
                      style="width:100%; margin-top:6px; font-size:17px; padding:8px 10px; box-sizing:border-box; border-radius:4px; border:1px solid #90caf9; font-weight:bold;" />
             </div>
 
@@ -2008,16 +2047,70 @@ function phaseLabel(p){
   return {saguru:"①さぐる",kizuku:"②きづく",hirameku:"③ひらめく",tsukuru:"④つくる",tamesu:"⑤ためす"}[p] || p;
 }
 
+// ===== 共有定数 =====
+const AUTO_INTERVAL = 180000; // 3分（カード生成・タイムラプス共通）
+
+// ===== mentionCount：重複カード検出 =====
+function normalizeKw(kw) {
+  return kw.trim()
+    .replace(/\s+/g, '')
+    .replace(/[、。！？「」【】『』・]/g, '')
+    .toLowerCase();
+}
+function isSimilarKw(a, b) {
+  const na = normalizeKw(a), nb = normalizeKw(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const minLen = Math.min(na.length, nb.length);
+  if (minLen >= 4 && (na.includes(nb) || nb.includes(na))) return true;
+  return false;
+}
+function findDuplicateNote(kw) {
+  for (const note of document.querySelectorAll('#canvas .note')) {
+    if (isSimilarKw(kw, note.dataset.keyword || '')) return note;
+  }
+  return null;
+}
+function applyMentionStyle(note) {
+  const cnt = parseInt(note.dataset.mentionCount || '1');
+  let badge = note.querySelector('.mention-badge');
+  if (cnt <= 1) { if (badge) badge.remove(); return; }
+  if (!badge) { badge = document.createElement('span'); badge.className = 'mention-badge'; note.appendChild(badge); }
+  badge.textContent = '×' + cnt;
+  // CSS属性セレクタで色を制御（4以上は high マーク）
+  if (cnt >= 4) note.setAttribute('data-mention-count-high', '');
+  else note.removeAttribute('data-mention-count-high');
+}
+function incrementMentionCount(note) {
+  const cnt = parseInt(note.dataset.mentionCount || '1') + 1;
+  note.dataset.mentionCount = String(cnt);
+  applyMentionStyle(note);
+  saveSession();
+}
+
 // インサイト共有（きづく→ひらめく・つくる）
 const coreProblemInput = document.getElementById("coreProblemInput");
 const coreProblemDisplay = document.getElementById("coreProblemDisplay");
 const hiramekuCoreProblemText = document.getElementById("hiramekuCoreProblemText");
+const hiramekuInsightBanner = document.getElementById("hirameku-insight-banner");
+const hiramekuInsightTextEl = document.getElementById("hirameku-insight-text");
 let coreProblemText = "";
+function updateHiramekuInsightBanner() {
+  if (!hiramekuInsightBanner) return;
+  if (coreProblemText) {
+    hiramekuInsightTextEl.className = "banner-value";
+    hiramekuInsightTextEl.textContent = coreProblemText;
+  } else {
+    hiramekuInsightTextEl.className = "banner-empty";
+    hiramekuInsightTextEl.textContent = "インサイトがまだ決まっていません";
+  }
+}
 if (coreProblemInput) {
   coreProblemInput.addEventListener("input", () => {
     coreProblemText = coreProblemInput.value;
     if (coreProblemDisplay) coreProblemDisplay.textContent = coreProblemText;
     if (hiramekuCoreProblemText) hiramekuCoreProblemText.textContent = coreProblemText;
+    updateHiramekuInsightBanner();
     saveSession();
   });
 }
@@ -2216,6 +2309,7 @@ function setWorksheetLayout(phase) {
     if (areaCurrentImage) areaCurrentImage.style.display="block";
     if (areaScene)        areaScene.style.display="block";
     if (kizukuPersonaBanner) kizukuPersonaBanner.style.display="none";
+    if (hiramekuInsightBanner) hiramekuInsightBanner.style.display="none";
     worksheetPhaseLabel.textContent = "ワークシート：①さぐる";
   } else if (phase==="kizuku") {
     canvasEl.classList.add("layout-kizuku");
@@ -2224,22 +2318,34 @@ function setWorksheetLayout(phase) {
     if (areaInsight)      areaInsight.style.display="block";
     updatePersonaBanner();
     if (kizukuPersonaBanner) kizukuPersonaBanner.style.display="block";
+    if (hiramekuInsightBanner) hiramekuInsightBanner.style.display="none";
     worksheetPhaseLabel.textContent = "ワークシート：②きづく";
   } else if (phase==="hirameku") {
     canvasEl.classList.add("layout-hirameku");
     if (kizukuPersonaBanner) kizukuPersonaBanner.style.display="none";
-    if (hiramekuCore) hiramekuCore.style.display="block";
+    // hirameku-core は廃止（表示しない）
     ideaSlots.forEach(el=>{ if(el) el.style.display="block"; });
-    const w = canvasEl.clientWidth || 800;
-    const h = canvasEl.clientHeight || 400;
-    const mx = w*0.06, my=h*0.06;
-    ideaSlots[0].style.left  = mx+"px";  ideaSlots[0].style.top   = my+"px";
-    ideaSlots[1].style.right = mx+"px";  ideaSlots[1].style.top   = my+"px"; ideaSlots[1].style.left="";
-    ideaSlots[2].style.left  = mx+"px";  ideaSlots[2].style.bottom= my+"px"; ideaSlots[2].style.top="";
-    ideaSlots[3].style.right = mx+"px";  ideaSlots[3].style.bottom= my+"px"; ideaSlots[3].style.top="";
+    // 2×2グリッド配置
+    const w = canvasEl.clientWidth  || 2000;
+    const h = canvasEl.clientHeight || 1400;
+    const gap = 40;
+    const sw = Math.floor((w - gap * 3) / 2);
+    const sh = Math.floor((h - gap * 3) / 2);
+    const x0 = gap, x1 = gap * 2 + sw;
+    const y0 = gap, y1 = gap * 2 + sh;
+    [ideaSlots[0], ideaSlots[1], ideaSlots[2], ideaSlots[3]].forEach(s => {
+      if (s) { s.style.right = ""; s.style.bottom = ""; s.style.width = sw+"px"; s.style.height = sh+"px"; }
+    });
+    if (ideaSlots[0]) { ideaSlots[0].style.left=x0+"px"; ideaSlots[0].style.top=y0+"px"; }
+    if (ideaSlots[1]) { ideaSlots[1].style.left=x1+"px"; ideaSlots[1].style.top=y0+"px"; }
+    if (ideaSlots[2]) { ideaSlots[2].style.left=x0+"px"; ideaSlots[2].style.top=y1+"px"; }
+    if (ideaSlots[3]) { ideaSlots[3].style.left=x1+"px"; ideaSlots[3].style.top=y1+"px"; }
+    updateHiramekuInsightBanner();
+    if (hiramekuInsightBanner) hiramekuInsightBanner.style.display="block";
     worksheetPhaseLabel.textContent = "ワークシート：③ひらめく（アイデア出し）";
   } else if (phase==="tsukuru") {
     if (kizukuPersonaBanner) kizukuPersonaBanner.style.display="none";
+    if (hiramekuInsightBanner) hiramekuInsightBanner.style.display="none";
     canvasEl.classList.add("layout-tsukuru");
     if (areaIdeaName) areaIdeaName.style.display="block";
     if (areaCoreProblem) areaCoreProblem.style.display="block";
@@ -2652,15 +2758,65 @@ let realtimeBuffer = '';
 let realtimeRunning = false;
 let processedLength = 0;
 
+// 自動セグメント録音（3分ごとにカード生成）
+let _autoSegmentTimer = null;
+let _isAutoSegment = false;
+
+// タイムラプス
+let _timelapseTimer = null;
+
 const VAD_CONFIG = {
-  volumeThreshold: 0.001,  // ← これを0.001に！
+  volumeThreshold: 0.001,
   silenceDuration: 3000,
 };
 
+function scheduleAutoSegment() {
+  clearAutoSegment();
+  _autoSegmentTimer = setTimeout(() => {
+    if (mediaRecorder && mediaRecorder.state === "recording") {
+      _isAutoSegment = true;
+      mediaRecorder.stop();
+    }
+  }, AUTO_INTERVAL);
+}
 
+function clearAutoSegment() {
+  if (_autoSegmentTimer) { clearTimeout(_autoSegmentTimer); _autoSegmentTimer = null; }
+}
+
+async function captureTimelapse() {
+  if (typeof html2canvas === 'undefined') return;
+  const canvas = document.getElementById('canvas');
+  if (!canvas) return;
+  try {
+    const imgCanvas = await html2canvas(canvas, {
+      scale: 0.4, useCORS: true, logging: false,
+      width: canvas.scrollWidth, height: canvas.scrollHeight
+    });
+    const base64 = imgCanvas.toDataURL('image/png').split(',')[1];
+    await fetch('/api/save_timelapse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: window.sessionId, image: base64 })
+    });
+  } catch(e) {
+    console.warn('タイムラプス撮影エラー:', e);
+  }
+}
+
+function startTimelapse() {
+  stopTimelapse();
+  captureTimelapse();
+  _timelapseTimer = setInterval(captureTimelapse, AUTO_INTERVAL);
+}
+
+function stopTimelapse() {
+  if (_timelapseTimer) { clearInterval(_timelapseTimer); _timelapseTimer = null; }
+}
 
 function stopRecordingInternal() {
   clearInterval(timerInterval);
+  clearAutoSegment();
   if (mediaRecorder && mediaRecorder.state === "recording") {
     mediaRecorder.stop();
     recordStatus.textContent = "録音停止処理中…";
@@ -2668,6 +2824,7 @@ function stopRecordingInternal() {
   vadRunning = false;
   vadConfirmPending = false;
   if (realtimeRunning) stopRealtimeMode();
+  stopTimelapse();
 }
 
 function startVadLoop() {
@@ -2739,8 +2896,9 @@ startRecordBtn.onclick = async () => {
     mediaRecorder.onstart = () => {
       recordStatus.textContent = "🔴 録音中… 00:00";
       stopRecordBtn.disabled = false;
-      startVadLoop();  // VAD ループ開始
-      if (document.getElementById('autoModeToggle').checked) startRealtimeMode();
+      startVadLoop();
+      scheduleAutoSegment();
+      if (!_isAutoSegment) startTimelapse();
       let recordSeconds = 0;
       timerInterval = setInterval(() => {
         recordSeconds++;
@@ -2752,8 +2910,12 @@ startRecordBtn.onclick = async () => {
 
     mediaRecorder.onstop = async () => {
       clearInterval(timerInterval);
+      clearAutoSegment();
       vadRunning = false;
       stopRecordBtn.disabled = true;
+
+      const wasAutoSegment = _isAutoSegment;
+      _isAutoSegment = false;
 
       const blob = new Blob(recordedChunks, { type: "audio/webm" });
       recordedChunks = [];
@@ -2828,7 +2990,15 @@ startRecordBtn.onclick = async () => {
           audioContext.close();
           audioContext = null;
         }
-        startRecordBtn.disabled = false;
+        if (wasAutoSegment) {
+          // 3分セグメント完了 → 新しいセグメントを自動開始
+          recordStatus.textContent = "⏳ 次のセグメントを開始中…";
+          _isAutoSegment = true;
+          setTimeout(() => startRecordBtn.click(), 500);
+        } else {
+          startRecordBtn.disabled = false;
+          stopTimelapse();
+        }
       }
     };
 
@@ -2838,6 +3008,8 @@ startRecordBtn.onclick = async () => {
     recordStatus.textContent =
       "マイクが利用できません（許可されていないか、端末が非対応です）。";
     startRecordBtn.disabled = false;
+    _isAutoSegment = false;
+    stopTimelapse();
   }
 };
 
@@ -3168,8 +3340,9 @@ function saveSession() {
     who:        n.dataset.who        || '',
     what:       n.dataset.what       || '',
     when:       n.dataset.when       || '',
-    source:     n.dataset.source     || '',
-    addedAt:    n.dataset.addedAt    || ''
+    source:      n.dataset.source      || '',
+    addedAt:     n.dataset.addedAt     || '',
+    mentionCount: n.dataset.mentionCount || '1'
   }));
 
   const session = {
@@ -3218,8 +3391,9 @@ function saveToServer() {
       who:        n.dataset.who        || '',
       what:       n.dataset.what       || '',
       when:       n.dataset.when       || '',
-      source:     n.dataset.source     || '',
-      addedAt:    n.dataset.addedAt    || ''
+      source:       n.dataset.source       || '',
+      addedAt:      n.dataset.addedAt      || '',
+      mentionCount: n.dataset.mentionCount || '1'
     }));
     const payload = {
       session_id:     window.sessionId,
@@ -3424,6 +3598,7 @@ function restoreSession(data) {
       if (coreProblemInput) coreProblemInput.value = coreProblemText;
       if (coreProblemDisplay) coreProblemDisplay.textContent = coreProblemText;
       if (hiramekuCoreProblemText) hiramekuCoreProblemText.textContent = coreProblemText;
+      updateHiramekuInsightBanner();
     }
     window.aiSupport = data.aiSupport !== undefined ? data.aiSupport : true;
     changePhase(data.phase || 'saguru');
@@ -3441,9 +3616,13 @@ function restoreSession(data) {
       note.dataset.importance = n.importance || 'medium';
       note.dataset.type       = n.type       || '';
       note.dataset.thought    = n.thought    || '';
-      if (n.speaker)  note.dataset.speaker  = n.speaker;
-      if (n.source)   note.dataset.source   = n.source;
-      if (n.addedAt)  note.dataset.addedAt  = n.addedAt;
+      if (n.speaker)       note.dataset.speaker      = n.speaker;
+      if (n.source)        note.dataset.source       = n.source;
+      if (n.addedAt)       note.dataset.addedAt      = n.addedAt;
+      if (n.mentionCount && parseInt(n.mentionCount) > 1) {
+        note.dataset.mentionCount = n.mentionCount;
+        applyMentionStyle(note);
+      }
       // 支援なし条件ではAI生成カードを非表示で復元
       if (window.aiSupport === false && (n.source || 'ai') !== 'manual') {
         note.classList.add('ai-pending');
@@ -4061,6 +4240,9 @@ function trimAreaCards(areaEl) {
 }
 
 function addKeywordCard(kw, emoji, quote, type, thought, who, what, when, speaker, importance, source) {
+  // 重複チェック：似たカードがあれば言及回数を増やして終了
+  const dup = findDuplicateNote(kw);
+  if (dup) { incrementMentionCount(dup); return dup; }
   const pos = getNextUnplacedPosition();
   const note = createNote(
     kw, '', '', pos.x, pos.y,
