@@ -1186,10 +1186,13 @@ def save_session():
 
     filepath = os.path.join(SESSIONS_DIR, f"{session_id}.json")
     try:
+        os.makedirs(SESSIONS_DIR, exist_ok=True)
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"セッション保存OK: {filepath}")
         return jsonify({"ok": True, "session_id": session_id})
     except Exception as e:
+        print(f"ERROR: セッション保存失敗: {e} | path={filepath}")
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
@@ -1284,10 +1287,13 @@ def save_project():
     project["sessions"] = sessions
 
     try:
+        os.makedirs(PROJECTS_DIR, exist_ok=True)
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(project, f, ensure_ascii=False, indent=2)
+        print(f"プロジェクト保存OK: {filepath} | カード数={len(project.get('notes',[]))}")
         return jsonify({"ok": True, "group_number": gn})
     except Exception as e:
+        print(f"ERROR: プロジェクト保存失敗: {e} | path={filepath}")
         return jsonify({"ok": False, "error": str(e)}), 500
 
 

@@ -3434,25 +3434,26 @@ function saveToProject() {
   clearTimeout(_projectSaveTimer);
   _projectSaveTimer = setTimeout(async () => {
     const notes = Array.from(document.querySelectorAll('#canvas .note')).map(n => ({
-      keyword:    n.dataset.keyword    || '',
-      quote:      n.dataset.quote      || '',
-      x:          n.style.left,
-      y:          n.style.top,
-      phase:      n.dataset.phase      || '',
-      emoji:      n.dataset.emoji      || '',
-      importance: n.dataset.importance || '',
-      speaker:    n.dataset.speaker    || '',
-      area:       n.dataset.area       || '',
-      type:       n.dataset.type       || '',
-      thought:    n.dataset.thought    || '',
-      who:        n.dataset.who        || '',
-      what:       n.dataset.what       || '',
-      when:       n.dataset.when       || '',
-      source:     n.dataset.source     || '',
-      addedAt:    n.dataset.addedAt    || ''
+      keyword:      n.dataset.keyword      || '',
+      quote:        n.dataset.quote        || '',
+      x:            n.style.left,
+      y:            n.style.top,
+      phase:        n.dataset.phase        || '',
+      emoji:        n.dataset.emoji        || '',
+      importance:   n.dataset.importance   || '',
+      speaker:      n.dataset.speaker      || '',
+      area:         n.dataset.area         || '',
+      type:         n.dataset.type         || '',
+      thought:      n.dataset.thought      || '',
+      who:          n.dataset.who          || '',
+      what:         n.dataset.what         || '',
+      when:         n.dataset.when         || '',
+      source:       n.dataset.source       || '',
+      addedAt:      n.dataset.addedAt      || '',
+      mentionCount: n.dataset.mentionCount || '1'
     }));
     try {
-      await fetch('/api/save_project', {
+      const res = await fetch('/api/save_project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3466,8 +3467,14 @@ function saveToProject() {
           created_at:   window.sessionCreatedAt || ''
         })
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('プロジェクト保存エラー:', res.status, err.error || '', '| 班', window.groupNumber);
+      } else {
+        console.log('プロジェクト保存OK: 班', window.groupNumber, '| カード数', notes.length);
+      }
     } catch(e) {
-      console.warn('プロジェクト保存失敗:', e);
+      console.error('プロジェクト保存ネットワークエラー:', e);
     }
   }, 3000);
 }
