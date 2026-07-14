@@ -123,6 +123,20 @@
       margin-top: 12px;
     }
 
+    /* フェーズタブ */
+    .phase-tab-bar {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-bottom: 18px;
+    }
+    .phase-tab {
+      padding: 6px 14px; border-radius: 20px;
+      border: 1.5px solid #2A6DB5; background: #fff;
+      color: #2A6DB5; font-size: 12px; font-weight: bold;
+      cursor: pointer; transition: all .15s;
+    }
+    .phase-tab:hover { background: #e8f0fe; }
+    .phase-tab.active { background: #2A6DB5; color: #fff; }
+
     /* カードセクション */
     #review-cards h3 {
       font-size: 14px;
@@ -287,7 +301,10 @@
     <div id="da-insight" class="insight-box" style="margin-top:12px;"></div>
   </div>
 
-  <!-- ノートカード（フェーズ別） -->
+  <!-- フェーズタブ + ノートカード -->
+  <div id="phase-tabs-container" style="display:none;" class="card-section">
+    <div id="phase-tab-bar" class="phase-tab-bar"></div>
+  </div>
   <div id="review-cards"></div>
 
   <!-- キーワードカード一覧 -->
@@ -571,11 +588,13 @@ async function loadAndRender(session) {
       minutes:'議事録', interview:'面談記録', custom:'カスタム',
     };
 
+    const phaseSections = [];
     Object.entries(byPhase).forEach(([phase, cards]) => {
       cards.sort((a, b) =>
         (IMP_ORDER[a.importance] ?? 1) - (IMP_ORDER[b.importance] ?? 1)
       );
       const section = document.createElement('div');
+      section.dataset.phase = phase;
       const h3 = document.createElement('h3');
       h3.textContent = phaseLabel[phase] || phase;
       section.appendChild(h3);
@@ -584,7 +603,40 @@ async function loadAndRender(session) {
       cards.forEach(card => row.appendChild(makeCard(card, currentLabels)));
       section.appendChild(row);
       container.appendChild(section);
+      phaseSections.push({ phase, section });
     });
+
+    // フェーズタブを生成（2フェーズ以上のとき）
+    if (phaseSections.length > 1) {
+      const tabBar = document.getElementById('phase-tab-bar');
+      tabBar.innerHTML = '';
+      document.getElementById('phase-tabs-container').style.display = '';
+
+      const activateTab = (selectedPhase) => {
+        tabBar.querySelectorAll('.phase-tab').forEach(t => t.classList.remove('active'));
+        tabBar.querySelector(`[data-tab="${selectedPhase}"]`)?.classList.add('active');
+        phaseSections.forEach(({ phase, section }) => {
+          section.style.display = (selectedPhase === 'all' || phase === selectedPhase) ? '' : 'none';
+        });
+      };
+
+      // 「すべて」タブ
+      const allTab = document.createElement('button');
+      allTab.className = 'phase-tab active';
+      allTab.textContent = 'すべて';
+      allTab.dataset.tab = 'all';
+      allTab.onclick = () => activateTab('all');
+      tabBar.appendChild(allTab);
+
+      phaseSections.forEach(({ phase }) => {
+        const tab = document.createElement('button');
+        tab.className = 'phase-tab';
+        tab.textContent = phaseLabel[phase] || phase;
+        tab.dataset.tab = phase;
+        tab.onclick = () => activateTab(phase);
+        tabBar.appendChild(tab);
+      });
+    }
 
     // DA分類分布
     renderDaDistribution(notes);

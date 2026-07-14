@@ -12,6 +12,7 @@ import traceback
 from datetime import datetime
 from collections import defaultdict
 from functools import wraps
+from urllib.parse import quote as urlquote
 from pydub import AudioSegment
 
 from flask import Flask, request, jsonify, send_from_directory, Response
@@ -932,11 +933,15 @@ def download_timelapse_zip(session_id):
             if fname.endswith('.png'):
                 zf.write(os.path.join(session_dir, fname), fname)
     buf.seek(0)
-    zip_name = f"timelapse_{safe_id}.zip"
+    # ASCII安全なファイル名（班など非ASCII文字はアンダースコアに置換）
+    ascii_id = re.sub(r'[^\w\-]', '_', session_id)[:40]  # re.UNICODEなし → ASCIIのみ
+    zip_name = f"timelapse_{ascii_id}.zip"
+    zip_name_encoded = urlquote(f"timelapse_{safe_id}.zip", safe='')
+    cd = f"attachment; filename=\"{zip_name}\"; filename*=UTF-8''{zip_name_encoded}"
     return Response(
         buf.read(),
         mimetype="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{zip_name}"'}
+        headers={"Content-Disposition": cd}
     )
 
 
@@ -1004,10 +1009,11 @@ def download_all_zip():
                     zf.write(fpath, f"recordings/{fname}")
     buf.seek(0)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    zip_name = f"grarec_all_{ts}.zip"
     return Response(
         buf.read(),
         mimetype="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="grarec_all_{ts}.zip"'}
+        headers={"Content-Disposition": f"attachment; filename=\"{zip_name}\""}
     )
 
 
