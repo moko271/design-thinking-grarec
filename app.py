@@ -1394,6 +1394,46 @@ def delete_session(session_id):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/api/delete_project/<group_number>", methods=["DELETE"])
+@require_admin
+def delete_project(group_number):
+    gn = _sanitize_group_number(group_number)
+    filepath = os.path.join(PROJECTS_DIR, f"group_{gn}.json")
+    if not os.path.exists(filepath):
+        return jsonify({"ok": False, "error": "project not found"}), 404
+    try:
+        os.remove(filepath)
+        print(f"プロジェクト削除: {filepath}")
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/delete_all_data", methods=["POST"])
+@require_admin
+def delete_all_data():
+    body = request.get_json() or {}
+    include_media = bool(body.get("include_media", False))
+    dirs_to_clear = [SESSIONS_DIR, PROJECTS_DIR]
+    if include_media:
+        dirs_to_clear += [RECORDINGS_DIR, TIMELAPSE_DIR]
+    deleted = 0
+    errors = []
+    for d in dirs_to_clear:
+        if not os.path.isdir(d):
+            continue
+        for fname in os.listdir(d):
+            fpath = os.path.join(d, fname)
+            try:
+                if os.path.isfile(fpath):
+                    os.remove(fpath)
+                    deleted += 1
+            except Exception as e:
+                errors.append(f"{fname}: {e}")
+    print(f"一括削除完了: {deleted}ファイル削除 include_media={include_media}")
+    return jsonify({"ok": True, "deleted": deleted, "errors": errors})
+
+
 @app.route("/api/list_sessions", methods=["GET"])
 @require_admin
 def list_sessions():

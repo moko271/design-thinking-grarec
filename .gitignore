@@ -40,3 +40,10 @@ static/saved/
 static/images/
 requirements_full.txt
 test_env/
+grarec_transcribe_tool/
+*.webm
+grarec_transcribe_tool/
+*.webm
+grarec_transcribe_tool/
+全班_文字起こし結果/
+*_文字起こし結果/

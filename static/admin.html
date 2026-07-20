@@ -81,6 +81,16 @@
       font-size: 11px; font-weight: bold;
     }
     .del-btn:hover { background: #c0392b; color: white; }
+    .danger-btn {
+      background: #c0392b; color: white; border: none;
+      padding: 6px 14px; border-radius: 6px; cursor: pointer;
+      font-size: 12px; font-weight: bold;
+    }
+    .danger-btn:hover { background: #96281b; }
+    .danger-btn.light {
+      background: none; color: #c0392b; border: 1.5px solid #c0392b;
+    }
+    .danger-btn.light:hover { background: #c0392b; color: white; }
   </style>
 </head>
 <body>
@@ -90,7 +100,7 @@
 </header>
 <main>
   <!-- 一括ダウンロード -->
-  <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;padding:14px 18px;background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.07);">
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;padding:14px 18px;background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.07);">
     <strong style="font-size:13px;">一括ダウンロード：</strong>
     <a href="/api/download_all_zip" style="text-decoration:none;">
       <button class="reload-btn" style="background:#1565c0;color:#fff;padding:6px 14px;">
@@ -101,6 +111,18 @@
       🎙 録音ファイル一覧
     </button>
     <span style="font-size:11px;color:#888;">セッションJSON・タイムラプス・録音ファイルをまとめてダウンロードします</span>
+  </div>
+
+  <!-- 一括削除（テストデータリセット用） -->
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;padding:14px 18px;background:#fff5f5;border:1.5px solid #e8c0c0;border-radius:10px;">
+    <strong style="font-size:13px;color:#c0392b;">⚠️ データ削除：</strong>
+    <button class="danger-btn light" onclick="deleteAllData(false)">
+      🗑 セッション・プロジェクトを削除
+    </button>
+    <button class="danger-btn" onclick="deleteAllData(true)">
+      🗑 録音・タイムラプスも含めて全削除
+    </button>
+    <span style="font-size:11px;color:#c0392b;">実験前のテストデータ消去用。操作は取り消せません。</span>
   </div>
 
   <h2>
@@ -141,7 +163,7 @@
         <th>カード数</th>
         <th>話し合い回数</th>
         <th>最終更新</th>
-        <th>振り返り</th>
+        <th>操作</th>
       </tr>
     </thead>
     <tbody id="proj-tbody"></tbody>
@@ -494,6 +516,8 @@ async function loadProjects() {
         <td>
           <a href="/review?session=${encodeURIComponent(sessions.length ? sessions[sessions.length-1].session_id : '')}"
              target="_blank">最終回を見る</a>
+          ／
+          <button class="del-btn" data-gn="${esc(p.group_number)}" onclick="deleteProject(this, event)">削除</button>
         </td>`;
       tbody.appendChild(tr);
 
@@ -537,6 +561,49 @@ async function loadProjects() {
 }
 
 loadProjects();
+
+async function deleteProject(btn, event) {
+  event.stopPropagation();
+  const gn = btn.dataset.gn;
+  if (!confirm(`班${gn}のプロジェクトデータを削除しますか？\nこの操作は取り消せません。`)) return;
+  try {
+    const res = await fetch(`/api/delete_project/${encodeURIComponent(gn)}`, { method: 'DELETE' });
+    if (res.status === 401) { alert('認証エラー。ページをリロードしてください。'); return; }
+    const data = await res.json();
+    if (!data.ok) { alert('削除失敗: ' + data.error); return; }
+    const dataRow   = btn.closest('tr.data-row');
+    const detailRow = dataRow?.nextElementSibling;
+    dataRow?.remove();
+    detailRow?.remove();
+    const remaining = document.querySelectorAll('#proj-tbody tr.data-row').length;
+    document.getElementById('proj-status').textContent = `${remaining} 班のプロジェクト`;
+  } catch(e) {
+    alert('エラー: ' + e.message);
+  }
+}
+
+async function deleteAllData(includeMedia) {
+  const target = includeMedia
+    ? 'すべてのセッション・プロジェクト・録音・タイムラプスデータ'
+    : 'すべてのセッション・プロジェクトデータ（録音・タイムラプスは残ります）';
+  if (!confirm(`${target}を削除しますか？\nこの操作は取り消せません。`)) return;
+  if (!confirm('本当に削除しますか？削除後に復元はできません。')) return;
+  try {
+    const res = await fetch('/api/delete_all_data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ include_media: includeMedia })
+    });
+    if (res.status === 401) { alert('認証エラー。ページをリロードしてください。'); return; }
+    const data = await res.json();
+    if (!data.ok) { alert('削除失敗: ' + (data.error || '不明なエラー')); return; }
+    alert(`削除完了: ${data.deleted} ファイルを削除しました。`);
+    loadSessions();
+    loadProjects();
+  } catch(e) {
+    alert('エラー: ' + e.message);
+  }
+}
 </script>
 
 <!-- タイムラプスモーダル -->
