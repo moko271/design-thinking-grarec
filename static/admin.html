@@ -125,8 +125,30 @@
     <span style="font-size:11px;color:#c0392b;">実験前のテストデータ消去用。操作は取り消せません。</span>
   </div>
 
+  <!-- 面談セッション -->
   <h2>
-    保存済みセッション
+    🤝 面談セッション（/mendan）
+    <button class="reload-btn" onclick="loadMendanSessions()">↺ 更新</button>
+  </h2>
+  <div id="mendan-status">読み込み中…</div>
+  <table id="mendan-tbl" style="display:none">
+    <thead>
+      <tr>
+        <th style="width:16px;"></th>
+        <th>担当者</th>
+        <th>タイトル</th>
+        <th>AI支援</th>
+        <th>カード数</th>
+        <th>時間(推定)</th>
+        <th>保存日時</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="mendan-tbody"></tbody>
+  </table>
+
+  <h2 style="margin-top:32px;">
+    ⚛️ 量子力学実験セッション
     <button class="reload-btn" onclick="loadSessions()">↺ 更新</button>
   </h2>
   <div id="status">読み込み中…</div>
@@ -275,11 +297,90 @@ function buildDetailPanel(s) {
     </div>`;
 }
 
+async function loadMendanSessions() {
+  document.getElementById('mendan-status').textContent = '読み込み中…';
+  document.getElementById('mendan-tbl').style.display = 'none';
+  try {
+    const res = await fetch('/api/list_sessions?type=mendan');
+    if (res.status === 401) {
+      document.getElementById('mendan-status').textContent = '認証エラー。ページをリロードしてください。';
+      return;
+    }
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    const tbody = document.getElementById('mendan-tbody');
+    tbody.innerHTML = '';
+
+    if (data.sessions.length === 0) {
+      document.getElementById('mendan-status').textContent =
+        '面談セッションはまだありません（/mendan からアクセスすると作成されます）。';
+      return;
+    }
+
+    data.sessions.forEach((s, idx) => {
+      const detailId = `mendan-detail-${idx}`;
+      const iconId   = `mendan-icon-${idx}`;
+      const aiLabel  = s.ai_support === false
+        ? '<span style="color:#888;">📝 なし</span>'
+        : '<span style="color:#1A5CB5;font-weight:bold;">✨ あり</span>';
+      const durLabel = s.duration_min != null ? `${s.duration_min}分` : '—';
+
+      const tr = document.createElement('tr');
+      tr.className = 'data-row';
+      tr.innerHTML = `
+        <td><span class="expand-icon" id="${iconId}">▶</span></td>
+        <td>${esc(s.operator_name || '—')}</td>
+        <td>${esc(s.title) || '（タイトルなし）'}</td>
+        <td>${aiLabel}</td>
+        <td style="text-align:center;">${s.note_count}</td>
+        <td style="text-align:center;">${durLabel}</td>
+        <td style="white-space:nowrap;">${fmtDate(s.saved_at)}</td>
+        <td>
+          <a href="/review?session=${encodeURIComponent(s.session_id)}" target="_blank">振り返り</a>
+          ／
+          <button class="del-btn" style="background:#1565c0;color:#fff;" data-sid="${esc(s.session_id)}" onclick="showTimelapse(this, event)">タイムラプス</button>
+          ／
+          <a href="/api/download_timelapse_zip/${encodeURIComponent(s.session_id)}" onclick="event.stopPropagation()">
+            <button class="del-btn" style="background:#1976d2;color:#fff;">ZIP</button>
+          </a>
+          ／
+          <button class="del-btn" style="background:#37474f;color:#fff;" data-sid="${esc(s.session_id)}" onclick="showRecordingsForSession(this, event)">録音</button>
+          ／
+          <button class="del-btn" data-sid="${esc(s.session_id)}" onclick="deleteSession(this, event)">削除</button>
+        </td>`;
+      tbody.appendChild(tr);
+
+      const detailTr = document.createElement('tr');
+      detailTr.className = 'detail-row';
+      detailTr.innerHTML = `
+        <td colspan="8">
+          <div class="detail-panel" id="${detailId}">
+            ${buildDetailPanel(s)}
+          </div>
+        </td>`;
+      tbody.appendChild(detailTr);
+
+      tr.addEventListener('click', () => {
+        const panel = document.getElementById(detailId);
+        const icon  = document.getElementById(iconId);
+        const isOpen = panel.classList.toggle('open');
+        icon.classList.toggle('open', isOpen);
+      });
+    });
+
+    document.getElementById('mendan-status').textContent = `${data.sessions.length} 件の面談セッション`;
+    document.getElementById('mendan-tbl').style.display = 'table';
+  } catch(e) {
+    document.getElementById('mendan-status').textContent = 'エラー: ' + e.message;
+  }
+}
+
 async function loadSessions() {
   document.getElementById('status').textContent = '読み込み中…';
   document.getElementById('tbl').style.display = 'none';
   try {
-    const res  = await fetch('/api/list_sessions');
+    const res  = await fetch('/api/list_sessions?type=general');
     if (res.status === 401) {
       document.getElementById('status').textContent = '認証エラー。ページをリロードしてください。';
       return;
@@ -388,6 +489,7 @@ async function deleteSession(btn, event) {
 }
 
 loadSessions();
+loadMendanSessions();
 
 // ===== タイムラプス =====
 async function showTimelapse(btn, event) {
@@ -599,6 +701,7 @@ async function deleteAllData(includeMedia) {
     if (!data.ok) { alert('削除失敗: ' + (data.error || '不明なエラー')); return; }
     alert(`削除完了: ${data.deleted} ファイルを削除しました。`);
     loadSessions();
+    loadMendanSessions();
     loadProjects();
   } catch(e) {
     alert('エラー: ' + e.message);

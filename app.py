@@ -199,6 +199,11 @@ def quantum():
     return send_from_directory("static", "index_ai.html")
 
 
+@app.route("/mendan")
+def mendan():
+    return send_from_directory("static", "index_ai.html")
+
+
 # =========================
 # プロンプト生成（keyword + quote 用）
 # =========================
@@ -1437,10 +1442,17 @@ def delete_all_data():
 @app.route("/api/list_sessions", methods=["GET"])
 @require_admin
 def list_sessions():
+    # ?type=mendan → mendan_ prefix のみ / ?type=general → それ以外 / 省略 → 全件
+    session_type = request.args.get("type", "all")
     try:
         sessions = []
         for fname in sorted(os.listdir(SESSIONS_DIR), reverse=True):
             if not fname.endswith(".json"):
+                continue
+            sid = fname[:-5]
+            if session_type == "mendan" and not sid.startswith("mendan_"):
+                continue
+            if session_type == "general" and sid.startswith("mendan_"):
                 continue
             fpath = os.path.join(SESSIONS_DIR, fname)
             try:
@@ -1448,8 +1460,9 @@ def list_sessions():
                     d = json.load(f)
                 metrics = _compute_metrics(d)
                 sessions.append({
-                    "session_id":      d.get("session_id", fname[:-5]),
+                    "session_id":      d.get("session_id", sid),
                     "group_number":    d.get("group_number", ""),
+                    "operator_name":   d.get("operator_name", ""),
                     "title":           d.get("title", ""),
                     "phase":           d.get("phase", ""),
                     "template":        d.get("template", ""),

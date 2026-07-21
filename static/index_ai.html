@@ -1399,6 +1399,73 @@
     </div>
   </div>
 
+  <!-- 面談記録専用入り口 (/mendan) -->
+  <div id="mendanModal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width:440px;">
+      <div style="text-align:center; margin-bottom:18px;">
+        <span style="font-size:32px;">🤝</span>
+        <h2 style="margin:8px 0 4px; font-size:18px; color:#1A3A5C;">
+          定点面談ワークシート
+        </h2>
+        <p style="font-size:12px; color:#888; margin:0;">shibuyaQWS 会員面談記録</p>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="font-size:13px; color:#555; display:block; margin-bottom:6px;">
+          ✍️ 担当者名（任意）
+        </label>
+        <input type="text" id="mendan-operator-input"
+          placeholder="担当者の名前（省略可）"
+          style="font-size:15px; padding:8px 12px; border:2px solid #ccc;
+                 border-radius:8px; width:100%; box-sizing:border-box;">
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="font-size:13px; color:#555; display:block; margin-bottom:6px;">
+          👥 参加人数（話者数）
+        </label>
+        <select id="mendan-speakers-select"
+          style="font-size:14px; padding:6px 10px; border:1px solid #ccc;
+                 border-radius:8px; width:100%;">
+          <option value="1">1人（担当者のみ記録）</option>
+          <option value="2" selected>2人</option>
+          <option value="3">3人</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:22px;">
+        <label style="font-size:13px; color:#555; display:block; margin-bottom:8px;">
+          🤖 AI可視化支援モード
+        </label>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="mendan-ai-on"
+            style="flex:1; padding:10px; border:2px solid #4a90d9;
+                   border-radius:8px; background:#e8f0ff; color:#1A5CB5;
+                   font-size:13px; cursor:pointer; font-weight:bold; font-family:inherit;">
+            ✨ 支援あり
+          </button>
+          <button type="button" id="mendan-ai-off"
+            style="flex:1; padding:10px; border:2px solid #ccc;
+                   border-radius:8px; background:white; color:#666;
+                   font-size:13px; cursor:pointer; font-family:inherit;">
+            📝 支援なし
+          </button>
+        </div>
+        <p style="font-size:11px; color:#888; margin-top:6px; line-height:1.5;">
+          支援あり：AIが会話からキーワードカードを自動生成します
+        </p>
+      </div>
+
+      <button id="mendan-start-btn" type="button"
+        style="width:100%; padding:12px; background:#1565c0; color:white;
+               border:none; border-radius:10px; font-size:15px; font-weight:bold;
+               cursor:pointer; font-family:inherit;
+               transition: opacity .2s;">
+        面談を開始する →
+      </button>
+    </div>
+  </div>
+
   <div id="setupModal" class="modal-overlay hidden">
     <div class="modal-card">
       <h2>はじめにセットアップ</h2>
@@ -2941,6 +3008,15 @@ startRecordBtn.onclick = async () => {
         // 自動セグメント or 支援なし → AI抽出してカード生成
         // （支援なしの場合は addKeywordCard 内で ai-pending クラスが付き非表示）
         if ((wasAutoSegment || window.aiSupport === false) && text) {
+          // 面談モード: 新しいカードを生成する前に、ユーザーが配置していない
+          // 前セグメントのカードをアーカイブ（非表示だが保持）
+          if (window.mendanMode && wasAutoSegment) {
+            document.querySelectorAll('#canvas .note[data-area="unplaced"]').forEach(note => {
+              note.dataset.archived = 'true';
+              note.style.display = 'none';
+            });
+          }
+
           recordStatus.textContent = "AI分析中…";
           try {
             const kwRes = await fetchWithRetry('/api/extract_keywords', {
@@ -3319,23 +3395,24 @@ function saveSession() {
   const notes = Array.from(
     document.querySelectorAll('#canvas .note')
   ).map(n => ({
-    keyword:    n.dataset.keyword    || '',
-    quote:      n.dataset.quote      || '',
-    x:          n.style.left,
-    y:          n.style.top,
-    phase:      n.dataset.phase      || '',
-    emoji:      n.dataset.emoji      || '',
-    importance: n.dataset.importance || '',
-    speaker:    n.dataset.speaker    || '',
-    area:       n.dataset.area       || '',
-    type:       n.dataset.type       || '',
-    thought:    n.dataset.thought    || '',
-    who:        n.dataset.who        || '',
-    what:       n.dataset.what       || '',
-    when:       n.dataset.when       || '',
-    source:      n.dataset.source      || '',
-    addedAt:     n.dataset.addedAt     || '',
-    mentionCount: n.dataset.mentionCount || '1'
+    keyword:      n.dataset.keyword      || '',
+    quote:        n.dataset.quote        || '',
+    x:            n.style.left,
+    y:            n.style.top,
+    phase:        n.dataset.phase        || '',
+    emoji:        n.dataset.emoji        || '',
+    importance:   n.dataset.importance   || '',
+    speaker:      n.dataset.speaker      || '',
+    area:         n.dataset.area         || '',
+    type:         n.dataset.type         || '',
+    thought:      n.dataset.thought      || '',
+    who:          n.dataset.who          || '',
+    what:         n.dataset.what         || '',
+    when:         n.dataset.when         || '',
+    source:       n.dataset.source       || '',
+    addedAt:      n.dataset.addedAt      || '',
+    mentionCount: n.dataset.mentionCount || '1',
+    archived:     n.dataset.archived     || ''
   }));
 
   const session = {
@@ -3352,6 +3429,7 @@ function saveSession() {
     speakerSummary: window.speakerSummary || null,
     speakerLabels:  window.speakerLabels  || {},
     aiSupport:      window.aiSupport !== false,
+    mendanMode:     window.mendanMode     || false,
     created_at:     window.sessionCreatedAt || '',
     savedAt:        new Date().toISOString()
   };
@@ -3370,23 +3448,24 @@ function saveToServer() {
     const notes = Array.from(
       document.querySelectorAll('#canvas .note')
     ).map(n => ({
-      keyword:    n.dataset.keyword    || '',
-      quote:      n.dataset.quote      || '',
-      x:          n.style.left,
-      y:          n.style.top,
-      phase:      n.dataset.phase      || '',
-      emoji:      n.dataset.emoji      || '',
-      importance: n.dataset.importance || '',
-      speaker:    n.dataset.speaker    || '',
-      area:       n.dataset.area       || '',
-      type:       n.dataset.type       || '',
-      thought:    n.dataset.thought    || '',
-      who:        n.dataset.who        || '',
-      what:       n.dataset.what       || '',
-      when:       n.dataset.when       || '',
+      keyword:      n.dataset.keyword      || '',
+      quote:        n.dataset.quote        || '',
+      x:            n.style.left,
+      y:            n.style.top,
+      phase:        n.dataset.phase        || '',
+      emoji:        n.dataset.emoji        || '',
+      importance:   n.dataset.importance   || '',
+      speaker:      n.dataset.speaker      || '',
+      area:         n.dataset.area         || '',
+      type:         n.dataset.type         || '',
+      thought:      n.dataset.thought      || '',
+      who:          n.dataset.who          || '',
+      what:         n.dataset.what         || '',
+      when:         n.dataset.when         || '',
       source:       n.dataset.source       || '',
       addedAt:      n.dataset.addedAt      || '',
-      mentionCount: n.dataset.mentionCount || '1'
+      mentionCount: n.dataset.mentionCount || '1',
+      archived:     n.dataset.archived     || ''
     }));
     const payload = {
       session_id:     window.sessionId,
@@ -3402,6 +3481,7 @@ function saveToServer() {
       speakerSummary: window.speakerSummary || null,
       speakerLabels:  window.speakerLabels  || {},
       aiSupport:      window.aiSupport !== false,
+      mendanMode:     window.mendanMode     || false,
       created_at:     window.sessionCreatedAt || ''
     };
     try {
@@ -3425,6 +3505,15 @@ let _quantumProjectData = null;
 function isQuantumMode() {
   return window.location.pathname === '/quantum' ||
     new URLSearchParams(window.location.search).get('mode') === 'quantum';
+}
+
+// ==== 面談記録専用モード (/mendan) ====
+window.mendanMode = false;
+let _mendanAiSupport = true;
+
+function isMendanMode() {
+  return window.location.pathname === '/mendan' ||
+    new URLSearchParams(window.location.search).get('mode') === 'mendan';
 }
 
 // プロジェクト保存（3秒デバウンス）
@@ -3578,6 +3667,57 @@ function saveToProject() {
   });
 })();
 
+// ==== 面談モード セットアップ ====
+(function setupMendanModal() {
+  const startBtn    = document.getElementById('mendan-start-btn');
+  const aiOnBtn     = document.getElementById('mendan-ai-on');
+  const aiOffBtn    = document.getElementById('mendan-ai-off');
+  if (!startBtn) return;
+
+  function setMAiBtn(active) {
+    [aiOnBtn, aiOffBtn].forEach(b => {
+      const isActive = b === active;
+      b.style.borderColor = isActive ? '#4a90d9' : '#ccc';
+      b.style.background  = isActive ? '#e8f0ff' : 'white';
+      b.style.color       = isActive ? '#1A5CB5' : '#666';
+      b.style.fontWeight  = isActive ? 'bold'    : '';
+    });
+  }
+  setMAiBtn(aiOnBtn);
+  aiOnBtn.addEventListener('click',  () => { _mendanAiSupport = true;  setMAiBtn(aiOnBtn); });
+  aiOffBtn.addEventListener('click', () => { _mendanAiSupport = false; setMAiBtn(aiOffBtn); });
+
+  startBtn.addEventListener('click', () => {
+    const operatorName = (document.getElementById('mendan-operator-input')?.value || '').trim();
+    window.aiSupport = _mendanAiSupport;
+    window.numSpeakers = parseInt(
+      document.getElementById('mendan-speakers-select')?.value) || 2;
+    updateNumSpeakersBar();
+
+    const now = new Date();
+    const ts  = now.getFullYear().toString()
+      + String(now.getMonth()+1).padStart(2,'0')
+      + String(now.getDate()).padStart(2,'0')
+      + '_' + String(now.getHours()).padStart(2,'0')
+      + String(now.getMinutes()).padStart(2,'0')
+      + String(now.getSeconds()).padStart(2,'0');
+    window.sessionId        = `mendan_${ts}`;
+    window.sessionCreatedAt = now.toISOString();
+
+    const opInput = document.getElementById('operator-name-input');
+    if (opInput && operatorName) opInput.value = operatorName;
+
+    document.getElementById('mendanModal').classList.add('hidden');
+    document.getElementById('topicInput').value = '定点面談';
+    window.mendanMode = true;
+    currentTemplate = 'interview';
+    changePhase('interview');
+    applyAiSupportMode();
+    setRecordingControlsEnabled(true);
+    saveSession();
+  });
+})();
+
 function restoreSession(data) {
   _savingSession = true;
   try {
@@ -3623,6 +3763,11 @@ function restoreSession(data) {
         note.dataset.mentionCount = n.mentionCount;
         applyMentionStyle(note);
       }
+      // 面談モードでアーカイブされたカード（非表示で保持）
+      if (n.archived === 'true') {
+        note.dataset.archived = 'true';
+        note.style.display = 'none';
+      }
       // 支援なし条件ではAI生成カードを非表示で復元
       if (window.aiSupport === false && (n.source || 'ai') !== 'manual') {
         note.classList.add('ai-pending');
@@ -3655,6 +3800,14 @@ window.addEventListener('load', async () => {
   if (isQuantumMode()) {
     if (onboarding) onboarding.classList.add('hidden');
     document.getElementById('quantumModal').classList.remove('hidden');
+    setRecordingControlsEnabled(false);
+    return;
+  }
+
+  // 面談記録専用モード: mendanModalを表示
+  if (isMendanMode()) {
+    if (onboarding) onboarding.classList.add('hidden');
+    document.getElementById('mendanModal').classList.remove('hidden');
     setRecordingControlsEnabled(false);
     return;
   }
