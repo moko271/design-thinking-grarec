@@ -207,7 +207,7 @@ def mendan():
 # =========================
 # プロンプト生成（keyword + quote 用）
 # =========================
-def build_prompt(memo: str, phase: str, prev_text: str = "") -> tuple[str, str]:
+def build_prompt(memo: str, phase: str, prev_text: str = "", template: str = "") -> tuple[str, str]:
     """
     メモとフェーズから、グループ学習発話の構造化抽出プロンプトを組み立てる。
     前文脈（prev_text）を考慮して、system_prompt と user_prompt を返す。
@@ -284,19 +284,48 @@ def build_prompt(memo: str, phase: str, prev_text: str = "") -> tuple[str, str]:
         "  ・決定事項・まとめ → area-next-goal\n\n"
         "必ず以下のJSON配列のみを返してください。\n"
         "説明文・```は不要です。\n\n"
-        "[\n"
-        "  {\n"
-        "    \"keyword\": \"発言の内容そのものを10〜20文字で切り出す。『〜が〜する』という行動の説明にしない。話し合いの中で出てきた事実・気持ち・アイデア・問いをそのまま短くした言葉にする。良い例：朝の準備が毎日間に合わない／なぜ前の日に準備できないのか？ 悪い例（これにしない）：Bが困っていることをはなす／Cが頻度を確認する\",\n"
-        "    \"who\": \"人名・担当者（なければ空文字）\",\n"
-        "    \"what\": \"行動・内容\",\n"
-        "    \"when\": \"日時・期限（なければ空文字）\",\n"
-        "    \"quote\": \"元の発言\",\n"
-        "    \"type\": \"fact|opinion|question|idea|reaction|instruction\",\n"
-        "    \"thought\": \"fact|problem|interpret|wish\"\n"
-        "  }\n"
-        "]\n"
     )
-    
+
+    is_interview = (phase == "interview" or template == "interview")
+    if is_interview:
+        user_prompt += (
+            "[\n"
+            "  {\n"
+            "    \"keyword\": \"発言の核心を10〜20文字で。固有名詞（人名・施設名等）はそのまま表記\",\n"
+            "    \"who\": \"人名・担当者（なければ空文字）\",\n"
+            "    \"what\": \"行動・内容\",\n"
+            "    \"when\": \"日時・期限（なければ空文字）\",\n"
+            "    \"quote\": \"元の発言\",\n"
+            "    \"type\": \"fact|opinion|question|idea|reaction|instruction\",\n"
+            "    \"thought\": \"fact|problem|interpret|wish\",\n"
+            "    \"area\": \"area-member|area-recent|area-next-goal|area-event|area-trouble|area-connect|area-comm-action|unplaced\"\n"
+            "  }\n"
+            "]\n\n"
+            "【areaの選択基準（必ず1つだけ選ぶ。迷ったら unplaced）】\n"
+            "area-member       : 参加者名・肩書き・日時・担当者\n"
+            "area-recent       : 最近の出来事・先月の活動・現状報告\n"
+            "area-next-goal    : 来月の目標・やりたいこと・方針・決定事項\n"
+            "area-event        : 参加予定イベント・解決したい課題・直近アクション\n"
+            "area-trouble      : 困っていること・悩み・課題・問題\n"
+            "area-connect      : 会いたい人・繋がりたい人・紹介依頼\n"
+            "area-comm-action  : コミュニケーターとして提供できること・支援内容\n"
+            "unplaced          : 上記のいずれにも明確に当てはまらない場合\n"
+        )
+    else:
+        user_prompt += (
+            "[\n"
+            "  {\n"
+            "    \"keyword\": \"発言の内容そのものを10〜20文字で切り出す。『〜が〜する』という行動の説明にしない。話し合いの中で出てきた事実・気持ち・アイデア・問いをそのまま短くした言葉にする。良い例：朝の準備が毎日間に合わない／なぜ前の日に準備できないのか？ 悪い例（これにしない）：Bが困っていることをはなす／Cが頻度を確認する\",\n"
+            "    \"who\": \"人名・担当者（なければ空文字）\",\n"
+            "    \"what\": \"行動・内容\",\n"
+            "    \"when\": \"日時・期限（なければ空文字）\",\n"
+            "    \"quote\": \"元の発言\",\n"
+            "    \"type\": \"fact|opinion|question|idea|reaction|instruction\",\n"
+            "    \"thought\": \"fact|problem|interpret|wish\"\n"
+            "  }\n"
+            "]\n"
+        )
+
     return system_prompt, user_prompt
 
 
@@ -361,7 +390,7 @@ def extract_keywords():
         prev_text = memo
         memo_text = ""
 
-    system_prompt, user_prompt = build_prompt(memo_text, phase, prev_text)
+    system_prompt, user_prompt = build_prompt(memo_text, phase, prev_text, template=template)
 
     if areas:
         area_desc = "\n".join(
@@ -405,7 +434,11 @@ def extract_keywords():
                             "detail": item.get("detail", kw).strip(),
                             "quote": item.get("quote", "").strip(),
                             "type": item.get("type", "opinion").strip().lower(),
-                            "thought": item.get("thought", "fact").strip().lower()
+                            "thought": item.get("thought", "fact").strip().lower(),
+                            "area": item.get("area", "").strip(),
+                            "who": item.get("who", "").strip(),
+                            "what": item.get("what", "").strip(),
+                            "when": item.get("when", "").strip(),
                         })
     except json.JSONDecodeError as e:
         print(f"JSON parse error: {e}\nRaw: {raw_output[:200]}")

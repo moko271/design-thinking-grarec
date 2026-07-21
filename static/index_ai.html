@@ -2106,7 +2106,7 @@ function phaseLabel(p){
 }
 
 // ===== 共有定数 =====
-const AUTO_INTERVAL = 120000; // 2分（カード生成・タイムラプス共通）
+const AUTO_INTERVAL = 180000; // 3分（カード生成・タイムラプス共通）
 
 // ===== mentionCount：重複カード検出 =====
 function normalizeKw(kw) {
@@ -3032,10 +3032,14 @@ startRecordBtn.onclick = async () => {
               (kwData.keywords || []).forEach(item => {
                 const kw = item.keyword || '';
                 if (!kw) return;
-                addKeywordCard(kw, getEmojiForKeyword(kw), item.quote || '',
+                const note = addKeywordCard(kw, getEmojiForKeyword(kw), item.quote || '',
                   item.type || '', item.thought || '',
                   item.who || '', item.what || '', item.when || '',
                   undefined, item.importance || 'medium');
+                // 面談モード：AIが指定したエリアが有効なら自動配置
+                if (window.mendanMode && note && item.area && MENDAN_AREA_IDS.has(item.area)) {
+                  placeNoteInArea(note, item.area);
+                }
               });
               saveSession();
             }
@@ -4410,6 +4414,42 @@ function trimAreaCards(areaEl) {
   } else if (badge) {
     badge.style.display = 'none';
   }
+}
+
+// 面談モード用：配置可能なエリアIDの集合
+const MENDAN_AREA_IDS = new Set([
+  'area-member', 'area-recent', 'area-next-goal',
+  'area-event', 'area-trouble', 'area-connect', 'area-comm-action'
+]);
+
+// カードを指定エリアに自動配置する（mendanMode専用）
+// 戻り値: 配置成功なら true、エリアが見つからない/非表示なら false
+function placeNoteInArea(note, areaId) {
+  const areaEl = document.getElementById(areaId);
+  if (!areaEl || areaEl.style.display === 'none') return false;
+
+  // このエリアにすでに置かれているカード数をカウント（スタガー位置計算）
+  const placed = document.querySelectorAll(`#canvas .note[data-area="${areaId}"]`);
+  const idx = placed.length;
+  const cols = 3;
+  const noteW = 112, noteH = 84, pad = 6, labelH = 34;
+  const col = idx % cols;
+  const row = Math.floor(idx / cols);
+  const x = areaEl.offsetLeft + pad + col * (noteW + 4);
+  const y = areaEl.offsetTop  + labelH + row * (noteH + 4);
+
+  note.style.left     = x + 'px';
+  note.style.top      = y + 'px';
+  note.style.width    = '';
+  note.style.height   = '';
+  note.style.minWidth = '';
+  note.style.minHeight= '';
+  note.style.maxWidth = '';
+  note.style.maxHeight= '';
+  note.style.overflow = '';
+  note.dataset.area   = areaId;
+  note.dataset.phase  = currentPhase;
+  return true;
 }
 
 function addKeywordCard(kw, emoji, quote, type, thought, who, what, when, speaker, importance, source) {
