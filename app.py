@@ -76,6 +76,16 @@ def require_admin(f):
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+# Whisper 文字起こし精度向上のための語彙ヒント
+# prompt パラメータとして渡すことで専門用語の誤認識を抑制する
+WHISPER_HINT = (
+    "量子力学、シュレーディンガーの猫、重ね合わせ、観測、波動関数、"
+    "不確定性原理、量子コンピュータ、量子もつれ、デコヒーレンス、"
+    "量子テレポーテーション、スピン、エンタングルメント、"
+    "ペルソナ、インサイト、デザイン思考、プロトタイプ、ユーザー体験、"
+    "GraRec、ワークシート、キーワードカード"
+)
+
 # =========================
 # フェーズごとの設定
 # =========================
@@ -258,11 +268,14 @@ def build_prompt(memo: str, phase: str, prev_text: str = "", template: str = "",
         "・単純な相槌のみの発言（例：そうだね・なるほど・うん・はい 等）\n"
         "・役割確認・作業分担のみの発言（例：じゃあAがやる・私が書く 等）\n"
         "・笑いや感嘆のみ（例：笑・えー・あはは・すごーい 等）\n"
-        "・GraRecというシステム自体の操作・UI操作・システムへの感想に関する発言\n"
+        "・GraRecというシステム自体の操作・UI操作・システムへの感想・評価に関する発言\n"
         "  （例：押してみて／消してみて／バチッと消せる？／カードが出た／\n"
-        "         重要なとこだけキーワードにしてくれてる／使いやすい 等）\n"
-        "  ※ 企画の中身（ペルソナ・インサイト・伝え方のアイデア等）に\n"
-        "    直接関係しない、ツール操作・GraRec自体についてのやりとりはすべて除外する\n\n"
+        "         重要なとこだけキーワードにしてくれてる／使いやすい／便利／すごい 等）\n"
+        "  ※ 判定基準: 発言が量子力学の企画内容（ペルソナ・インサイト・伝え方の\n"
+        "    アイデア等）に言及しているか確認する。GraRecという単語や、カードの\n"
+        "    表示・操作・機能について言及している発言は、内容の重要度に関わらず除外する。\n"
+        "    「このシステムはすごい」「使いやすい」「便利だね」のように\n"
+        "    GraRec・ツール自体を主語または話題にした評価発言も除外する\n\n"
         "【typeの定義（発話の形式）】\n"
         "- fact：観察・現状・事実の報告\n"
         "- opinion：意見・考えの表明\n"
@@ -541,7 +554,8 @@ def split_and_transcribe(file_path, suffix):
             response = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=f,
-                language="ja"
+                language="ja",
+                prompt=WHISPER_HINT
             )
         return response.text
 
@@ -558,7 +572,8 @@ def split_and_transcribe(file_path, suffix):
                 response = client.audio.transcriptions.create(
                     model="whisper-1",
                     file=f,
-                    language="ja"
+                    language="ja",
+                    prompt=WHISPER_HINT
                 )
             texts.append(response.text)
         finally:
@@ -1185,7 +1200,8 @@ def transcribe_chunk():
             whisper_res = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=f,
-                language="ja"
+                language="ja",
+                prompt=WHISPER_HINT
             )
         text = (whisper_res.text or "").strip()
 

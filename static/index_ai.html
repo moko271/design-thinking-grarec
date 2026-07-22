@@ -2070,9 +2070,10 @@ function phaseLabel(p){
 }
 
 // ===== 共有定数 =====
-const AUTO_INTERVAL           = 180000; // 3分（面談カード生成・タイムラプス共通）
-const QUANTUM_FIRST_INTERVAL  = 180000; // 3分（量子：1回目のみ）
-const QUANTUM_LONG_INTERVAL   = 600000; // 10分（量子：2回目以降）
+const AUTO_INTERVAL              = 180000; // 3分（面談カード生成・タイムラプス共通）
+const QUANTUM_FIRST_INTERVAL     = 180000; // 3分（量子：最初のキーワード抽出サイクル）
+const QUANTUM_LONG_INTERVAL      = 600000; // 10分（量子：2回目以降のキーワード抽出サイクル）
+const QUANTUM_TRANSCRIBE_INTERVAL =  90000; // 90秒（量子：文字起こしのみ行う短い録音区切り）
 
 // ===== mentionCount：重複カード検出 =====
 function normalizeKw(kw) {
@@ -2782,7 +2783,9 @@ let processedLength = 0;
 // 自動セグメント録音（量子: 1回目3分→以降10分 / 面談: 3分固定）
 let _autoSegmentTimer = null;
 let _isAutoSegment = false;
-let _quantumSegmentCount = 0; // 量子モードで自動セグメントが何回発火したか
+let _quantumSegmentCount   = 0;    // 量子モードでキーワード抽出を何回行ったか
+let _quantumAccumulatedText = '';  // 量子モード：前回抽出以降の蓄積テキスト
+let _quantumCycleStartTime  = null; // 量子モード：現在の抽出サイクル開始時刻（ms）
 
 // タイムラプス
 let _timelapseTimer = null;
@@ -2794,14 +2797,12 @@ const VAD_CONFIG = {
 
 function scheduleAutoSegment() {
   clearAutoSegment();
-  // 量子モード: 1回目は3分、2回目以降は10分
-  // 面談モード・その他: AUTO_INTERVAL（3分）固定
-  const interval = window.quantumMode
-    ? (_quantumSegmentCount >= 1 ? QUANTUM_LONG_INTERVAL : QUANTUM_FIRST_INTERVAL)
-    : AUTO_INTERVAL;
+  // 量子モード: 90秒ごとに文字起こしだけ行い、テキストを蓄積する
+  //   → キーワード抽出はサイクル経過時間で別途判断（onstop 内）
+  // 面談・その他: AUTO_INTERVAL（3分）固定
+  const interval = window.quantumMode ? QUANTUM_TRANSCRIBE_INTERVAL : AUTO_INTERVAL;
   _autoSegmentTimer = setTimeout(() => {
     if (mediaRecorder && mediaRecorder.state === "recording") {
-      _quantumSegmentCount++; // 発火ごとにカウントアップ
       _isAutoSegment = true;
       mediaRecorder.stop();
     }
@@ -2845,7 +2846,10 @@ function stopTimelapse() {
 function stopRecordingInternal() {
   clearInterval(timerInterval);
   clearAutoSegment();
-  _quantumSegmentCount = 0; // 手動停止でリセット（次回録音から1回目3分に戻る）
+  // 手動停止: 量子モードの状態をすべてリセット（次回録音から最初のサイクルに戻る）
+  _quantumSegmentCount    = 0;
+  _quantumAccumulatedText = '';
+  _quantumCycleStartTime  = null;
   if (mediaRecorder && mediaRecorder.state === "recording") {
     mediaRecorder.stop();
     recordStatus.textContent = "録音停止処理中…";
@@ -2927,7 +2931,11 @@ startRecordBtn.onclick = async () => {
       stopRecordBtn.disabled = false;
       startVadLoop();
       scheduleAutoSegment();
-      if (!_isAutoSegment) startTimelapse();
+      if (!_isAutoSegment) {
+        startTimelapse();
+        // 量子モードの新規セッション開始時のみ抽出サイクル時刻を初期化
+        if (window.quantumMode) _quantumCycleStartTime = Date.now();
+      }
       let recordSeconds = 0;
       timerInterval = setInterval(() => {
         recordSeconds++;
@@ -2979,9 +2987,30 @@ startRecordBtn.onclick = async () => {
         window.speakerSummary  = null;
         window.speakerSegments = [];
 
-        // 自動セグメント or 支援なし → AI抽出してカード生成
-        // （支援なしの場合は addKeywordCard 内で ai-pending クラスが付き非表示）
-        if ((wasAutoSegment || window.aiSupport === false) && text) {
+        // ── 量子モード: 文字起こしテキストを蓄積し、サイクル時間でキーワード抽出を判断 ──
+        // ── 面談・通常モード: 従来通り自動セグメントのたびに抽出 ──
+        let doExtract = false;
+        let textForExtraction = text;
+
+        if (window.quantumMode && wasAutoSegment) {
+          // 90秒区切りで蓄積。抽出サイクル（3分 or 10分）に達したら抽出する
+          if (text) {
+            _quantumAccumulatedText += (_quantumAccumulatedText ? '\n' : '') + text;
+          }
+          const elapsed   = Date.now() - (_quantumCycleStartTime || Date.now());
+          const threshold = (_quantumSegmentCount === 0) ? QUANTUM_FIRST_INTERVAL : QUANTUM_LONG_INTERVAL;
+          if (elapsed >= threshold) {
+            doExtract = true;
+            textForExtraction = _quantumAccumulatedText.trim() || text;
+          } else {
+            recordStatus.textContent = `文字起こし蓄積中… (${_quantumAccumulatedText.length}文字)`;
+          }
+        } else if ((wasAutoSegment || window.aiSupport === false) && text) {
+          // 面談・通常モード: 自動セグメントのたびに（または支援なし時に）抽出
+          doExtract = true;
+        }
+
+        if (doExtract && textForExtraction) {
           // 面談モード: 新しいカードを生成する前に、ユーザーが配置していない
           // 前セグメントのカードをアーカイブ（非表示だが保持）
           if (window.mendanMode && wasAutoSegment) {
@@ -2997,10 +3026,10 @@ startRecordBtn.onclick = async () => {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                memo: text, phase: currentPhase,
+                memo: textForExtraction, phase: currentPhase,
                 template: currentTemplate || "", areas: getCustomAreas(),
-                // 量子2回目以降（10分セグメント）は重要度フィルタを強化
-                long_segment: window.quantumMode && _quantumSegmentCount > 1
+                // 量子2回目以降（10分サイクル）は重要度フィルタを強化
+                long_segment: window.quantumMode && _quantumSegmentCount > 0
               })
             });
             const kwData = await kwRes.json();
@@ -3022,6 +3051,14 @@ startRecordBtn.onclick = async () => {
           } catch(e) {
             console.warn('AI抽出エラー:', e);
           }
+
+          // 量子モード: 抽出完了後にサイクルをリセット
+          if (window.quantumMode && wasAutoSegment) {
+            _quantumAccumulatedText = '';
+            _quantumCycleStartTime  = Date.now();
+            _quantumSegmentCount++;
+          }
+
           recordStatus.textContent = wasAutoSegment
             ? "カード生成完了。次のセグメントを開始中…"
             : "文字起こし完了：メモ欄に追記しました。";
