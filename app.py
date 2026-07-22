@@ -207,7 +207,7 @@ def mendan():
 # =========================
 # プロンプト生成（keyword + quote 用）
 # =========================
-def build_prompt(memo: str, phase: str, prev_text: str = "", template: str = "") -> tuple[str, str]:
+def build_prompt(memo: str, phase: str, prev_text: str = "", template: str = "", long_segment: bool = False) -> tuple[str, str]:
     """
     メモとフェーズから、グループ学習発話の構造化抽出プロンプトを組み立てる。
     前文脈（prev_text）を考慮して、system_prompt と user_prompt を返す。
@@ -222,6 +222,26 @@ def build_prompt(memo: str, phase: str, prev_text: str = "", template: str = "")
         "抽象化・一般化しないこと。"
     )
     
+    if long_segment:
+        _extraction_rules = (
+            "・量子力学の伝え方を考える企画立案において、\n"
+            "  話し合いの本質的な進展（アイデア・気づき・意思決定）に\n"
+            "  直接関わる重要な発言を優先的に選んで抽出する\n"
+            "・相槌・繰り返し・些細な確認・作業的やり取りは積極的に除外する\n"
+            "・枚数は内容の重要度で判断し、5〜12件程度を目安にする\n"
+            "  （この期間に重要な発言が少なければ少なくてよい）\n"
+            "・前の文脈を考慮して意図を判断する\n"
+            "・話者が変わるタイミングも意識して分類する\n\n"
+        )
+    else:
+        _extraction_rules = (
+            "・必ず最低10件、できれば15〜20件抽出する\n"
+            "・短いテキストでも1文ごとに1件を目安に抽出する\n"
+            "・些細に見えても話し合いの記録として価値ある発言は全て含める\n"
+            "・前の文脈を考慮して意図を判断する\n"
+            "・話者が変わるタイミングも意識して分類する\n\n"
+        )
+
     user_prompt = (
         "以下は中高生のグループ学習の発話記録です。\n"
         "すべての重要な発言を抽出し、各発言について\n"
@@ -232,12 +252,7 @@ def build_prompt(memo: str, phase: str, prev_text: str = "", template: str = "")
         "今回の発話テキスト:\n"
         f"{memo}\n\n"
         f"現在のフェーズ: {phase}\n\n"
-        "【抽出ルール】\n"
-        "・必ず最低10件、できれば15〜20件抽出する\n"
-        "・短いテキストでも1文ごとに1件を目安に抽出する\n"
-        "・些細に見えても話し合いの記録として価値ある発言は全て含める\n"
-        "・前の文脈を考慮して意図を判断する\n"
-        "・話者が変わるタイミングも意識して分類する\n\n"
+        f"【抽出ルール】\n{_extraction_rules}"
         "【抽出しない発言】\n"
         "・雑談・世間話（例：お腹すいた・休憩しよう・今日暑いね 等）\n"
         "・単純な相槌のみの発言（例：そうだね・なるほど・うん・はい 等）\n"
@@ -390,7 +405,8 @@ def extract_keywords():
         prev_text = memo
         memo_text = ""
 
-    system_prompt, user_prompt = build_prompt(memo_text, phase, prev_text, template=template)
+    long_segment = bool(data.get("long_segment", False))
+    system_prompt, user_prompt = build_prompt(memo_text, phase, prev_text, template=template, long_segment=long_segment)
 
     if areas:
         area_desc = "\n".join(
