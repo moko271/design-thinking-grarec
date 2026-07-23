@@ -2544,7 +2544,10 @@ addKeywordBtn.onclick = () => {
 
 // ==== 未配置ゾーン ヘルパー ====
 function getNextUnplacedPosition() {
-  const existing = document.querySelectorAll('#canvas .note[data-area="unplaced"]');
+  // アーカイブ済みカードを除外してカウント（退避後の新カードが先頭から並ぶように）
+  const existing = document.querySelectorAll(
+    '#canvas .note[data-area="unplaced"]:not([data-archived="true"])'
+  );
   const idx = existing.length;
   const col = idx % CARDS_PER_ROW;
   const row = Math.floor(idx / CARDS_PER_ROW);
@@ -3011,13 +3014,23 @@ startRecordBtn.onclick = async () => {
         }
 
         if (doExtract && textForExtraction) {
-          // 面談モード: 新しいカードを生成する前に、ユーザーが配置していない
-          // 前セグメントのカードをアーカイブ（非表示だが保持）
-          if (window.mendanMode && wasAutoSegment) {
-            document.querySelectorAll('#canvas .note[data-area="unplaced"]').forEach(note => {
-              note.dataset.archived = 'true';
-              note.style.display = 'none';
-            });
+          // カード入れ替え: 新しいカードを出す前に、ユーザーが動かしていないカードを退避
+          if (wasAutoSegment) {
+            if (window.mendanMode) {
+              // 面談モード: unplaced カードをすべてアーカイブ
+              document.querySelectorAll('#canvas .note[data-area="unplaced"]').forEach(note => {
+                note.dataset.archived = 'true';
+                note.style.display = 'none';
+              });
+            } else if (window.quantumMode) {
+              // 量子モード: AIが生成したunplacedカードのみアーカイブ（手動追加カードは維持）
+              document.querySelectorAll('#canvas .note[data-area="unplaced"]').forEach(note => {
+                if (note.dataset.source !== 'manual' && note.dataset.archived !== 'true') {
+                  note.dataset.archived = 'true';
+                  note.style.display = 'none';
+                }
+              });
+            }
           }
 
           recordStatus.textContent = "AI分析中…";
