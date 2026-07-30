@@ -160,3 +160,58 @@ build_prompt関数に、「GraRecというシステム自体の操作方法・�
 
 ### 関連するファイル・コミット
 - ファイル：`static/index_ai.html`（`getNextUnplacedPosition` / `onstop` 内アーカイブブロック）
+
+---
+
+### [2026-07-28] メモリ使用量比較検証：pyannote vs gpt-4o-transcribe-diarize（検証中）
+
+### 課題・背景
+7/15実験当日、pyannote.audioによる話者分離がRenderサーバーのメモリ（2GB）を超過し、
+502エラーでサービスが落ちた。その場の対応としてリアルタイム処理から話者分離を除外したが、
+次回実験では話者分離を復活させたい。OpenAIのgpt-4o-transcribe-diarize（クラウドAPIで
+話者分離を行う方式）に切り替えることで、サーバー側のメモリ消費を大幅に削減できると
+仮説を立て、定量的に比較検証することにした。
+
+### 採用した設計（検証方法）
+`compare_memory_usage.py` を作成し、同一音声ファイルに対して以下の2方式を実行し比較する。
+
+- **方式A（pyannote）**: `pyannote/speaker-diarization-3.1` パイプラインをロードして実行。
+  モデルの重みをメモリ上に展開するため、ロード時に大量のRSSを消費する。
+- **方式B（gpt-4o-transcribe-diarize）**: OpenAI APIに音声を送り、クラウド側で
+  話者分離付き文字起こしを行う。サーバー側で行うのはHTTPリクエストのみなので、
+  メモリ消費は最小限のはず。
+
+psutilのRSSをバックグラウンドスレッドで100ms間隔でサンプリングし、ピーク値を記録する。
+openai SDK 1.12.0はgpt-4o-transcribe-diarize未対応のため、httpxで直接
+`/v1/audio/transcriptions` を呼び出す実装とした（SDK非依存）。
+
+### 測定結果（未測定 → 実行後に記入）
+
+| 指標               | 方式A (pyannote) | 方式B (gpt-4o-diarize) |
+|--------------------|-----------------|------------------------|
+| ベースラインRSS (MB) | 未測定          | 未測定                  |
+| ピークRSS (MB)      | 未測定          | 未測定                  |
+| 増加量 ΔRSS (MB)   | 未測定          | 未測定                  |
+| 処理時間 (秒)       | 未測定          | 未測定                  |
+| 検出話者数          | 未測定          | 未測定                  |
+
+Render Shellでの実行コマンド:
+```bash
+# 方式Bのみ（pyannote未インストールの場合）
+python compare_memory_usage.py data/recordings/<対象ファイル>.webm --skip-pyannote --output /tmp
+
+# 方式A・B両方
+HF_TOKEN=<トークン> python compare_memory_usage.py <ファイル> --output /tmp
+```
+
+### 根拠・参考にしたもの
+- 実験当日の502エラーログ（pyannoteのメモリ消費が原因）
+- OpenAI gpt-4o-transcribeファミリーのAPI仕様
+
+### 検討したが採用しなかった案
+- tracemalloc による Python ヒープ計測：RSS全体（モデルウェイトのC拡張メモリを含む）を
+  捉えられないため不採用
+- memory_profiler デコレータ：Render環境でのインストール不要にするためpsutilを選択
+
+### 関連するファイル・コミット
+- ファイル：`compare_memory_usage.py`
