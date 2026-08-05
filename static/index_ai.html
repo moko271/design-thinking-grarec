@@ -2795,7 +2795,8 @@ let _timelapseTimer = null;
 
 const VAD_CONFIG = {
   volumeThreshold: 0.001,
-  silenceDuration: 3000,
+  silenceDuration: 3000,        // /quantum: 3秒（複数人の活発なディスカッション向け）
+  mendanSilenceDuration: 18000, // /mendan: 18秒（1対1の面談では自然な沈黙が多いため）
 };
 
 function scheduleAutoSegment() {
@@ -2881,12 +2882,17 @@ function startVadLoop() {
     } else {
       // 無音が続いているか確認
       const silentMs = Date.now() - lastVoiceTime;
-      if (silentMs > VAD_CONFIG.silenceDuration && !vadConfirmPending) {
+      const _vadThreshold = window.mendanMode ? VAD_CONFIG.mendanSilenceDuration : VAD_CONFIG.silenceDuration;
+      if (silentMs > _vadThreshold && !vadConfirmPending) {
         vadConfirmPending = true;
-        recordStatus.textContent = "⏸ 話し合いが止まっているようです…";
+        recordStatus.textContent = window.mendanMode
+          ? "⏸ しばらく発言がないようです…"
+          : "⏸ 話し合いが止まっているようです…";
         setTimeout(() => {
           if (!vadRunning) { vadConfirmPending = false; return; }
-          const stop = confirm("話し合いが止まっているようです。\n録音を終了しますか？\n\n「いいえ」を選ぶと録音を継続します。");
+          const stop = confirm(window.mendanMode
+            ? "しばらく発言がないようです。\n録音を終了しますか？\n\n「いいえ」を選ぶと録音を継続します。"
+            : "話し合いが止まっているようです。\n録音を終了しますか？\n\n「いいえ」を選ぶと録音を継続します。");
           vadConfirmPending = false;
           if (stop) {
             stopRecordingInternal();
