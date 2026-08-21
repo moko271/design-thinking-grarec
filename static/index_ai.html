@@ -1522,6 +1522,11 @@
             </button>
             <button id="stopRecordBtn" class="btn-secondary"
                     disabled>停止して文字起こし</button>
+            <button id="finalStopBtn" class="btn-secondary"
+                    disabled
+                    style="color:#c62828;border-color:#e8b0b0;">
+              録音を完全に終了する
+            </button>
           </div>
           <span id="recordStatus"
                 style="font-size:11px; color:#c62828;
@@ -2757,6 +2762,8 @@ uploadAudioBtn.onclick = async () => {
 // ==== ブラウザ録音（VAD 付き自動停止版） ====
 const startRecordBtn = document.getElementById("startRecordBtn");
 const stopRecordBtn  = document.getElementById("stopRecordBtn");
+const finalStopBtn   = document.getElementById("finalStopBtn");
+let _permanentStop = false;
 const recordStatus   = document.getElementById("recordStatus");
 
 let mediaRecorder = null;
@@ -2938,6 +2945,7 @@ startRecordBtn.onclick = async () => {
     mediaRecorder.onstart = () => {
       recordStatus.textContent = "🔴 録音中… 00:00";
       stopRecordBtn.disabled = false;
+      finalStopBtn.disabled = false;
       startVadLoop();
       scheduleAutoSegment();
       if (!_isAutoSegment) {
@@ -2959,6 +2967,7 @@ startRecordBtn.onclick = async () => {
       clearAutoSegment();
       vadRunning = false;
       stopRecordBtn.disabled = true;
+      finalStopBtn.disabled = true;
 
       const wasAutoSegment = _isAutoSegment;
       _isAutoSegment = false;
@@ -3094,7 +3103,7 @@ startRecordBtn.onclick = async () => {
           audioContext.close();
           audioContext = null;
         }
-        if (wasAutoSegment) {
+        if (wasAutoSegment && !_permanentStop) {
           // 自動セグメント完了 → 新しいセグメントを自動開始
           // disabled を外してから click() しないとブラウザが無視する
           _isAutoSegment = true;
@@ -3104,6 +3113,7 @@ startRecordBtn.onclick = async () => {
           startRecordBtn.disabled = false;
           stopTimelapse();
         }
+        _permanentStop = false;
       }
     };
 
@@ -3120,6 +3130,13 @@ startRecordBtn.onclick = async () => {
 
 // 手動停止ボタン（ユーザーが任意タイミングで止めたいとき用）
 stopRecordBtn.onclick = () => {
+  stopRecordingInternal();
+};
+
+// 完全停止ボタン: _permanentStop フラグを立ててから停止することで
+// wasAutoSegment が true であっても自動再開をスキップする
+finalStopBtn.onclick = () => {
+  _permanentStop = true;
   stopRecordingInternal();
 };
 

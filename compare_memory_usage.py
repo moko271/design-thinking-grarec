@@ -165,7 +165,7 @@ def run_method_a(wav_path: str, hf_token: str) -> dict:
 
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
-            use_auth_token=hf_token
+            token=hf_token
         )
         print(f"  [方式A] Pipeline ロード完了  現在RSS: {tracker.peak_mb:.0f}MB")
 
@@ -203,8 +203,8 @@ def run_method_b(wav_path: str, api_key: str) -> dict:
     httpx で直接 /v1/audio/transcriptions を呼び出すため、
     openai SDK のバージョンに依存しない。
 
-    レスポンス形式（verbose_json）:
-      response["segments"] に speaker フィールドが付く（モデル対応時）
+    レスポンス形式（diarized_json）:
+      response["segments"] に speaker, text, start, end が含まれる。
     """
     print("  [方式B] API 呼び出し中（gpt-4o-transcribe-diarize）...")
 
@@ -253,32 +253,20 @@ def run_method_b(wav_path: str, api_key: str) -> dict:
                         )
                     },
                     data={
-                        "model":           "gpt-4o-transcribe-diarize",
-                        "response_format": "verbose_json",
-                        "language":        "ja",
+                        "model":              "gpt-4o-transcribe-diarize",
+                        "response_format":    "diarized_json",
+                        "chunking_strategy":  "auto",
+                        "language":           "ja",
                     },
                     timeout=300.0,
                 )
 
                 if resp.status_code != 200:
-                    # モデル非対応の場合は whisper-1 + verbose_json にフォールバック
-                    print(f"  [方式B] {resp.status_code}: {resp.text[:200]}")
-                    print("  [方式B] gpt-4o-transcribe-diarize が利用不可。"
-                          "whisper-1 でフォールバックします...")
-                    resp = httpx.post(
-                        "https://api.openai.com/v1/audio/transcriptions",
-                        headers={"Authorization": f"Bearer {api_key}"},
-                        files={"file": (
-                            f"chunk_{chunk_idx}.wav", chunk_bytes, "audio/wav"
-                        )},
-                        data={
-                            "model":           "whisper-1",
-                            "response_format": "verbose_json",
-                            "language":        "ja",
-                        },
-                        timeout=300.0,
+                    raise RuntimeError(
+                        f"gpt-4o-transcribe-diarize API エラー "
+                        f"(チャンク {chunk_idx+1}/{chunk_count}): "
+                        f"HTTP {resp.status_code} - {resp.text[:300]}"
                     )
-                    resp.raise_for_status()
 
                 result = resp.json()
                 all_text_parts.append(result.get("text", ""))
@@ -306,7 +294,6 @@ def run_method_b(wav_path: str, api_key: str) -> dict:
         if spk:
             speaker_segments[spk] = speaker_segments.get(spk, 0) + 1
 
-    # speaker フィールドなし = 話者分離非対応のモデル（whisper-1 フォールバック等）
     if not speaker_segments and all_segments:
         speaker_segments = {"(話者分離なし)": len(all_segments)}
 
