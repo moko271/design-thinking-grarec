@@ -15,3 +15,4 @@ torchaudio
 soundfile==0.13.1
 huggingface_hub==1.13.0
 numpy
+python-pptx==1.0.2

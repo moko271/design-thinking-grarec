@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GraRec 課題シート</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+/*
+  GraRec 課題シート（/kadai）
+  - 授業の課題フォーマット（A4横：課題番号・リーダ学番・メンバ名＋自由スペース）をそのまま画面にする
+  - AIカードはシートの外のトレイに届き、参加者が自分で置く（配置は学習効果のため人が行う）
+  - 研究用に「使われ方」のイベントを記録する
+*/
+:root{
+  --navy:#1C3A5E; --navy-ink:#FFFFFF;
+  --ground:#E9EDF2; --panel:#FFFFFF; --panel-2:#F4F6F9;
+  --ink:#1D2733; --ink-2:#5A6778; --line:#CFD6DF;
+  --accent:#2B6FD6; --accent-soft:#E3EDFB;
+  --rec:#D63B3B; --warn:#B45309; --warn-soft:#FEF3C7; --ok:#1F8A5B;
+  --leader:#FF0000; --observer:#0070C0;
+  --paper-rule:#1F2B4D; --paper-cell:#CFCFCF;
+  --card:#FFFDF3; --card-line:#E3DDC2;
+  --k-topic:#3B5B8C; --k-opinion:#2F7D5B; --k-difference:#C2410C; --k-question:#7A4FB5; --k-agreement:#0E7C86;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;font-size:14px}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.55}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* top bar */
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:10px 16px;background:var(--navy);color:var(--navy-ink)}
+.brand{font-weight:700;font-size:18px;letter-spacing:.02em}
+.group{background:#fff;color:var(--navy);font-weight:700;border-radius:999px;padding:2px 12px;font-size:13px}
+.spacer{flex:1}
+.rec{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.1);border-radius:999px;padding:4px 8px 4px 4px}
+.rec-btn{display:flex;align-items:center;gap:8px;border:0;border-radius:999px;padding:6px 14px;background:#fff;color:var(--navy);font-weight:700}
+.rec-btn .dot{width:10px;height:10px;border-radius:50%;background:var(--rec)}
+.rec.on .rec-btn{background:var(--rec);color:#fff}
+.rec.on .rec-btn .dot{background:#fff;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.level{width:34px;height:6px;border-radius:3px;background:rgba(255,255,255,.25);overflow:hidden}
+.level i{display:block;height:100%;width:0;background:#7CE0A8;transition:width .1s}
+.rec-state{font-size:13px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.interval{display:flex;align-items:center;gap:6px;font-size:13px}
+.interval select{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:4px 6px;color:#fff}
+.interval select option{color:#111}
+.bar-btn{border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;border-radius:8px;padding:6px 12px}
+.bar-btn:hover{background:rgba(255,255,255,.12)}
+.export{border:0;background:#fff;color:var(--navy);font-weight:700;border-radius:8px;padding:7px 14px}
+
+.banner{margin:12px 16px 0;padding:10px 14px;border-radius:8px;background:var(--warn-soft);color:var(--warn);font-size:13px;display:flex;gap:10px;align-items:center}
+.banner button{margin-left:auto;border:0;background:transparent;color:inherit;font-weight:700}
+
+/* layout */
+.main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;padding:16px;align-items:start}
+@media (max-width:900px){.main{grid-template-columns:1fr}}
+
+/* sheet（課題フォーマット） */
+.sheet-wrap{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.sheet-meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;margin-bottom:10px;color:var(--ink-2);font-size:12px}
+.sheet{position:relative;width:100%;aspect-ratio:297/210;background:#fff;color:#111;box-shadow:0 1px 3px rgba(0,0,0,.18);font-family:"BIZ UDPGothic","Hiragino Sans",sans-serif;overflow:hidden;container-type:inline-size}
+.s-head{position:absolute;left:2.2%;right:3%;top:2.2%;display:flex;align-items:flex-end}
+.s-title{font-size:3.1cqw;line-height:1;white-space:nowrap;padding-right:.6cqw;padding-bottom:.5cqw}
+.s-title input{width:5.4cqw;border:0;border-bottom:1px dashed #999;font:inherit;background:transparent;color:inherit;padding:0}
+.s-table{flex:1;display:grid;grid-template-columns:15% 1fr;font-size:1.75cqw}
+.s-th{background:#000;color:#fff;font-weight:700;text-align:center;padding:.5cqw 0;border-right:1px solid #fff}
+.s-td{background:var(--paper-cell);min-height:3.8cqw;padding:.45cqw .6cqw;display:flex;align-items:center;flex-wrap:wrap;gap:.5cqw;border-right:1px solid #fff}
+.s-td input{width:100%;border:0;background:transparent;font:inherit;color:#111;text-align:center}
+.chip{border:0;background:#fff;border-radius:3px;padding:.15cqw .7cqw;font:inherit;font-size:1.6cqw;font-weight:700;color:#111}
+.chip.leader{color:var(--leader)}
+.chip.observer{color:var(--observer)}
+.chip.add{background:transparent;color:#555;font-weight:400;border:1px dashed #888}
+.s-rule{position:absolute;left:2.9%;right:2.6%;top:17.6%;height:.55cqw;background:var(--paper-rule)}
+.s-body{position:absolute;left:2.9%;right:2.6%;top:19.3%;bottom:8.4%}
+.s-body.drop{outline:2px dashed var(--accent);outline-offset:4px;background:rgba(43,111,214,.04)}
+.s-hint{position:absolute;inset:0;display:grid;place-items:center;color:#9aa3ad;font-size:1.6cqw;pointer-events:none;text-align:center;line-height:1.7}
+.s-page{position:absolute;right:3%;bottom:2.4%;font-size:1.8cqw}
+
+/* cards */
+.card{position:relative;background:var(--card);border:1px solid var(--card-line);border-radius:6px;padding:8px 10px;font-family:"BIZ UDPGothic",sans-serif;line-height:1.45;touch-action:none;user-select:none;cursor:grab}
+.card .kind{display:inline-block;font-size:11px;font-weight:700;color:#fff;border-radius:3px;padding:0 6px;margin-bottom:3px;background:var(--k-topic)}
+.card[data-kind="opinion"] .kind{background:var(--k-opinion)}
+.card[data-kind="difference"] .kind{background:var(--k-difference)}
+.card[data-kind="question"] .kind{background:var(--k-question)}
+.card[data-kind="agreement"] .kind{background:var(--k-agreement)}
+.card[data-kind="manual"] .kind{background:#6B7280}
+.card .lone{display:inline-block;font-size:11px;color:var(--k-difference);margin-left:6px}
+.card .kw{font-weight:700;font-size:14px;color:var(--ink);outline:none}
+.card .kw[contenteditable="true"]{background:#FFF5C2;border-radius:3px}
+.card .q{font-size:11.5px;color:var(--ink-2);margin-top:3px}
+.card .x{position:absolute;right:3px;top:1px;border:0;background:transparent;color:var(--ink-2);font-size:15px;line-height:1;padding:3px 5px;opacity:0}
+.card:hover .x,.card:focus-within .x{opacity:1}
+.card .cnt{position:absolute;right:6px;bottom:4px;font-size:11px;font-weight:700;color:var(--k-difference)}
+.card.dragging{opacity:.95;box-shadow:0 8px 20px rgba(0,0,0,.25);cursor:grabbing;z-index:50}
+.card.new{animation:pop .35s ease-out}
+@keyframes pop{from{transform:scale(.92);opacity:.3}}
+.sheet .card{position:absolute;width:18cqw;padding:.5cqw .8cqw;background:#FFF9D9;border-color:#E6D98C}
+.sheet .card .kind{font-size:1cqw;padding:0 .5cqw;margin-bottom:.2cqw}
+.sheet .card .lone{font-size:1cqw}
+.sheet .card .kw{font-size:1.4cqw;color:#111}
+.sheet .card .q{display:none}
+.sheet .card .cnt{font-size:1.1cqw}
+.sheet .card .x{color:#555}
+@media (prefers-reduced-motion:reduce){.rec.on .rec-btn .dot,.card.new{animation:none}}
+
+/* tray */
+.tray{background:var(--panel);border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column;max-height:calc(100vh - 110px);position:sticky;top:16px}
+@media (max-width:900px){.tray{position:static;max-height:none}}
+.tray-h{padding:12px 14px 10px;border-bottom:1px solid var(--line)}
+.tray-h h2{margin:0;font-size:15px}
+.tray-h p{margin:4px 0 0;font-size:12px;color:var(--ink-2);line-height:1.55}
+.now{margin-top:8px;width:100%;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:700;border-radius:8px;padding:7px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:8px;font-size:11px;color:var(--ink-2)}
+.legend span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:3px;vertical-align:0;background:var(--c)}
+.list{padding:10px 12px;display:flex;flex-direction:column;gap:8px;overflow:auto;flex:1;min-height:120px}
+.empty{color:var(--ink-2);font-size:12px;text-align:center;padding:20px 8px;line-height:1.7}
+.manual-add{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--line)}
+.manual-add input{flex:1;min-width:0;border:1px solid var(--line);background:var(--panel-2);border-radius:6px;padding:6px 8px}
+.manual-add button{border:1px solid var(--line);background:var(--panel-2);border-radius:6px;padding:6px 10px}
+
+/* usage log */
+.log{border-top:1px solid var(--line);padding:10px 14px 12px;background:var(--panel-2);border-radius:0 0 10px 10px}
+.log h3{margin:0 0 6px;font-size:12px;color:var(--ink-2);font-weight:500;letter-spacing:.04em}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+.stat b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+.stat span{font-size:11px;color:var(--ink-2)}
+.rate{margin-top:8px;font-size:12px;color:var(--ink-2)}
+.meter{height:6px;background:var(--line);border-radius:3px;margin-top:4px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ok);width:0;transition:width .3s}
+
+/* start screen */
+.overlay{position:fixed;inset:0;background:rgba(15,25,40,.55);display:grid;place-items:center;padding:16px;z-index:100}
+.start{background:var(--panel);border-radius:12px;padding:24px;width:min(460px,100%);box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.start h1{margin:0 0 4px;font-size:20px}
+.start p{margin:0 0 16px;color:var(--ink-2);font-size:13px;line-height:1.6}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;font-size:13px}
+.field input,.field textarea{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--panel-2)}
+.field small{color:var(--ink-2)}
+.row{display:flex;gap:10px}
+.row .field{flex:1}
+.primary{width:100%;border:0;background:var(--navy);color:#fff;font-weight:700;border-radius:8px;padding:10px;font-size:15px}
+.resume{margin-top:10px;width:100%;border:1px solid var(--line);background:var(--panel-2);border-radius:8px;padding:9px;font-size:13px}
+
+/* 声の登録 */
+:root{--v1:#E07B39;--v2:#3A7BD5;--v3:#2E9D6A;--v4:#A45DC2;--other:#B9C0C8;--ok-soft:#E3F4EC;--nudge:#9A4A00;--nudge-soft:#FFF1DC}
+.reg{background:var(--panel);border-radius:12px;padding:22px;width:min(520px,100%);box-shadow:0 20px 50px rgba(0,0,0,.3);max-height:calc(100vh - 32px);overflow:auto}
+.reg h1{margin:0 0 6px;font-size:19px}
+.reg .lead{margin:0 0 12px;color:var(--ink-2);font-size:13px;line-height:1.65}
+.script{background:var(--panel-2);border-radius:8px;padding:10px 12px;font-family:"BIZ UDPGothic",sans-serif;font-size:15px;margin-bottom:12px}
+.script small{display:block;color:var(--ink-2);font-size:11px;font-family:"Zen Kaku Gothic New",sans-serif;margin-bottom:2px}
+.people{display:flex;flex-direction:column;gap:8px}
+.person{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px}
+.swatch{width:26px;height:26px;border-radius:50%;background:var(--c);display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700}
+.person input{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--panel-2)}
+.pstate{font-size:12px;color:var(--ink-2);margin-top:3px}
+.pstate.done{color:var(--ok)}
+.pstate.err{color:var(--rec)}
+.rbtn{border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:6px 12px;font-weight:700;min-width:112px}
+.rbtn.rec{background:var(--rec);border-color:var(--rec);color:#fff}
+.consent{display:flex;gap:8px;align-items:flex-start;margin:14px 0 4px;font-size:13px;line-height:1.55}
+.consent input{margin-top:3px}
+.consent.warn{color:var(--rec)}
+.reg .note{font-size:12px;color:var(--ink-2);line-height:1.6;margin:0 0 14px}
+.reg .actions{display:flex;gap:10px;flex-wrap:wrap}
+.reg .actions .primary{flex:1;width:auto;min-width:180px}
+.reg .skip{border:1px solid var(--line);background:transparent;border-radius:8px;padding:10px 14px;font-size:13px;color:var(--ink-2)}
+/* 話のバランス */
+.balance{border-top:1px solid var(--line);padding:10px 14px 12px}
+.balance-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.balance-h h3{margin:0;font-size:12px;color:var(--ink-2);font-weight:500;letter-spacing:.04em}
+.balance-h button{border:0;background:transparent;color:var(--accent);font-size:11px;padding:0}
+.bbar{display:flex;height:16px;border-radius:5px;overflow:hidden;background:var(--panel-2)}
+.bbar i{display:block;height:100%;background:var(--c);transition:flex-grow .6s ease}
+.bbar i + i{border-left:2px solid var(--panel)}
+.bkeys{display:flex;gap:10px;margin-top:6px}
+.bkeys span{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.bmsg{margin-top:8px;font-size:12px;border-radius:7px;padding:7px 9px;line-height:1.55}
+.bmsg.calm{color:var(--ok);background:var(--ok-soft)}
+.bmsg.wait{color:var(--ink-2);background:var(--panel-2)}
+.bmsg.nudge{color:var(--nudge);background:var(--nudge-soft);display:flex;gap:8px;align-items:flex-start}
+.bmsg.nudge button{margin-left:auto;border:0;background:transparent;color:inherit;font-size:11px;text-decoration:underline;white-space:nowrap}
+.dots{display:inline-flex;gap:3px;vertical-align:-1px}
+.dots b{width:10px;height:10px;border-radius:50%;background:var(--c);display:inline-block}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:calc(100% - 32px);z-index:200}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <span class="brand">GraRec</span>
+  <span class="group" id="groupBadge" hidden></span>
+  <div class="rec" id="rec">
+    <button class="rec-btn" id="recBtn" type="button"><span class="dot"></span><span id="recLabel">録音をはじめる</span></button>
+    <span class="level" title="マイクの音の大きさ"><i id="level"></i></span>
+    <span class="rec-state" id="recState">止まっています</span>
+  </div>
+  <label class="interval" for="intervalSel">カードの間隔
+    <select id="intervalSel">
+      <option value="3-10" selected>最初3分 → 以降10分</option>
+      <option value="3">3分ごと</option>
+      <option value="5">5分ごと</option>
+      <option value="10">10分ごと</option>
+    </select>
+  </label>
+  <span class="spacer"></span>
+  <button class="bar-btn" id="newBtn" type="button">新しいシート</button>
+  <button class="export" id="exportBtn" type="button">PowerPointで書き出す</button>
+</header>
+
+<div class="banner" id="banner" hidden><span id="bannerMsg"></span><button type="button" id="bannerClose" aria-label="閉じる">×</button></div>
+
+<main class="main">
+  <section class="sheet-wrap" aria-label="課題シート">
+    <div class="sheet-meta">
+      <span>カードは右のトレイからシートにドラッグして置く。ダブルクリックで書き直せる</span>
+      <span>メンバー名をクリック → リーダ（赤）／オブザーバ（青）／メンバ</span>
+    </div>
+    <div class="sheet" id="sheet">
+      <div class="s-head">
+        <div class="s-title">課題 <input id="kadaiNo" value="1-1" aria-label="課題番号"></div>
+        <div class="s-table">
+          <div class="s-th">リーダ学番</div>
+          <div class="s-th">チームメンバ名（リーダは赤字、オブザーバは青字）</div>
+          <div class="s-td"><input id="leaderId" placeholder="学籍番号" aria-label="リーダ学番"></div>
+          <div class="s-td" id="members"></div>
+        </div>
+      </div>
+      <div class="s-rule"></div>
+      <div class="s-body" id="body">
+        <div class="s-hint" id="bodyHint">ここはみんなで自由に使うスペース<br>話し合いから出たカードを置いて、書き出したあとPowerPointで線や囲みを足していける</div>
+      </div>
+      <div class="s-page">1</div>
+    </div>
+  </section>
+
+  <aside class="tray" aria-label="カードトレイ">
+    <div class="tray-h">
+      <h2>話し合いから出たカード</h2>
+      <p>決まった間隔でここに届きます。シートに置かなかったカードは、次のカードが届くときに入れ替わります。</p>
+      <button class="now" id="nowBtn" type="button">いまの話をカードにする</button>
+      <div class="legend" aria-label="カードの種類">
+        <span style="--c:var(--k-topic)">論点</span>
+        <span style="--c:var(--k-opinion)">意見</span>
+        <span style="--c:var(--k-difference)">ちがい</span>
+        <span style="--c:var(--k-question)">問い</span>
+        <span style="--c:var(--k-agreement)">まとまり</span>
+      </div>
+    </div>
+    <div class="list" id="list"></div>
+    <form class="manual-add" id="manualForm">
+      <input id="manualInput" placeholder="自分でカードを書く" aria-label="自分で書くカード">
+      <button type="submit">追加</button>
+    </form>
+    <div class="balance" id="balance" hidden>
+      <div class="balance-h"><h3>話のバランス（直近10分）</h3><button type="button" id="reRegBtn">声を登録しなおす</button></div>
+      <div class="bbar" id="bbar" role="img" aria-label="直近10分の話した量の割合"></div>
+      <div class="bkeys" id="bkeys"></div>
+      <div id="bmsg"></div>
+    </div>
+    <div class="log">
+      <h3>この班の使われ方（研究用に自動で記録）</h3>
+      <div class="stats">
+        <div class="stat"><b id="sGen">0</b><span>届いた</span></div>
+        <div class="stat"><b id="sPlaced">0</b><span>置いた</span></div>
+        <div class="stat"><b id="sEdit">0</b><span>書き直し</span></div>
+        <div class="stat"><b id="sManual">0</b><span>手書き</span></div>
+      </div>
+      <div class="rate">AIカードの採用率 <b id="sRate">–</b></div>
+      <div class="meter"><i id="sMeter"></i></div>
+    </div>
+  </aside>
+</main>
+
+<div class="overlay" id="startOverlay">
+  <form class="start" id="startForm">
+    <h1>課題シートをはじめる</h1>
+    <p>話し合いを録音して、出てきた話をカードにします。カードをどこに置くかはみんなで決めてください。</p>
+    <div class="row">
+      <label class="field">班番号<input id="startGroup" inputmode="numeric" required placeholder="例：3"></label>
+      <label class="field">課題番号<input id="startKadai" value="1-1" required></label>
+    </div>
+    <label class="field">課題の内容（任意）
+      <textarea id="startHint" rows="2" placeholder="例：身近な困りごとを見つけて、原因を整理する"></textarea>
+      <small>書いておくと、話の中から課題に関係するカードを選びやすくなります</small>
+    </label>
+    <button class="primary" type="submit">はじめる</button>
+    <button class="resume" type="button" id="resumeBtn" hidden></button>
+  </form>
+</div>
+
+<div class="overlay" id="voiceOverlay" hidden>
+  <form class="reg" id="voiceForm" onsubmit="return false">
+    <h1>声を登録する（1人5秒）</h1>
+    <p class="lead">話し合いの中で「誰の話が多いか」を<b>色だけ</b>で見分けるために使います。名前は話し合いの画面には出ません。自分の色だけ覚えておいてください。</p>
+    <div class="script"><small>「録る」を押したら、これを読んでください</small>こんにちは、<span id="scriptName">〇〇</span>です。今日はよろしくお願いします。</div>
+    <div class="people" id="voicePeople"></div>
+    <label class="consent" id="consentLabel"><input type="checkbox" id="agree"> 声のサンプルを、この授業の話し合いの色分けにだけ使うことに同意します</label>
+    <p class="note">声のサンプルは「新しいシート」を押したとき、または12時間たつと削除されます。登録しない人がいても使えます（その人の発言は灰色で数えます）。名前はシートのメンバ欄に入ります。</p>
+    <div class="actions">
+      <button class="primary" id="voiceGo" type="button" disabled>この色ではじめる</button>
+      <button class="skip" type="button" id="voiceSkip">登録せずにはじめる</button>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+
+// ================= 設定 =================
+// 動作確認用：URLに ?quick を付けると、区切り30秒・カード1分ごと・バランス判定1分後から、で動く
+const QUICK = new URLSearchParams(location.search).has('quick');
+const SEGMENT_MS = (QUICK ? 30 : 90) * 1000;          // 文字起こしの区切り（90秒ごとに裏で文字起こし）
+const TIMELAPSE_MS = 3 * 60 * 1000;    // 画面の記録（研究用）
+const MAX_CARDS = 6;                   // 1回に届くカードの上限（7/15実験で「多すぎる」の声）
+const KIND_LABEL = {topic:'論点', opinion:'意見', difference:'ちがい', question:'問い', agreement:'まとまり', manual:'手書き'};
+const STORE_KEY = 'grarec_kadai_current';
+
+// ================= 状態 =================
+const S = {
+  session_id: '', group_number: '', kadai_no: '1-1', task_hint: '', leader_id: '',
+  members: [{name:'', role:'leader'}],
+  cards: [],            // {id, keyword, quote, kind, lone, type, thought, reason, source:'ai'|'manual', place:'tray'|'sheet'|'archived'|'deleted', x, y, mention, addedAt, batch}
+  events: [],           // 使われ方ログ {t, ev, id?, kw?, extra?}
+  transcript: [],       // {t, text}
+  plan: '3-10', cycle: 0, lastExtracted: '', pendingText: '',
+  voice: {enabled: false, slots: {}},   // slots: {v1: {name, done}}
+  speech: [],           // 区間ごとの話した秒数 {t: 届いた時刻(ms), seg_start, seg_end: 録音の開始・終了(ms), sec: {v1: 12.3, other: 4}}
+  balTrace: [],         // 研究用：15秒ごとのバランス判定 {t, state, b, shares}
+  recStartedAt: 0,
+  created_at: ''
+};
+let uid = 0;
+
+// ================= ユーティリティ =================
+const nowISO = () => new Date().toISOString();
+function log(ev, card, extra){ S.events.push({t: nowISO(), ev, id: card ? card.id : undefined, kw: card ? card.keyword : undefined, ...(extra||{})}); }
+let toastTimer;
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 2800); }
+function banner(msg){ $('bannerMsg').textContent = msg; $('banner').hidden = false; }
+$('bannerClose').onclick = () => $('banner').hidden = true;
+const norm = s => (s||'').replace(/[\s、。！？!?「」『』・]/g, '').toLowerCase();
+function similar(a, b){ const x = norm(a), y = norm(b); if (!x || !y) return false; if (x === y) return true; return Math.min(x.length, y.length) >= 5 && (x.includes(y) || y.includes(x)); }
+
+// ================= メンバー =================
+const ROLE_NEXT = {'': 'leader', leader: 'observer', observer: ''};
+const ROLE_TEXT = {'': 'メンバ', leader: 'リーダ', observer: 'オブザーバ'};
+function renderMembers(){
+  const box = $('members'); box.innerHTML = '';
+  S.members.forEach((m, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip ' + m.role;
+    b.textContent = m.name || '名前';
+    b.title = ROLE_TEXT[m.role] + '（クリックで役割を切り替え／ダブルクリックで名前を変更）';
+    let clickTimer;
+    b.onclick = () => { clearTimeout(clickTimer); clickTimer = setTimeout(() => { m.role = ROLE_NEXT[m.role]; renderMembers(); save(); }, 220); };
+    b.ondblclick = () => { clearTimeout(clickTimer); editMember(i, b); };
+    box.appendChild(b);
+  });
+  const add = document.createElement('button');
+  add.type = 'button'; add.className = 'chip add'; add.textContent = '＋ メンバー';
+  add.onclick = () => { S.members.push({name:'', role:''}); renderMembers(); editMember(S.members.length - 1, $('members').children[S.members.length - 1]); };
+  box.appendChild(add);
+}
+function editMember(i, btn){
+  const inp = document.createElement('input');
+  inp.value = S.members[i].name; inp.placeholder = '名前';
+  inp.style.cssText = 'width:9cqw;font:inherit;font-size:1.6cqw;border:1px solid #999;border-radius:3px;padding:0 .3cqw;text-align:left';
+  btn.replaceWith(inp); inp.focus();
+  const done = () => {
+    const v = inp.value.trim();
+    if (v) S.members[i].name = v; else S.members.splice(i, 1);
+    renderMembers(); save();
+  };
+  inp.addEventListener('blur', done, {once: true});
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); });
+}
+
+// ================= カード =================
+function cardEl(c){
+  const el = document.createElement('div');
+  el.className = 'card new'; el.dataset.id = c.id; el.dataset.kind = c.kind; el.tabIndex = 0;
+  el.innerHTML = '<span class="kind"></span><span class="lone" hidden>ひとことだけ出た</span><div class="kw"></div><div class="q" hidden></div><button class="x" type="button" aria-label="カードを消す">×</button>';
+  el.querySelector('.kind').textContent = KIND_LABEL[c.kind] || '';
+  el.querySelector('.lone').hidden = !c.lone;
+  el.querySelector('.kw').textContent = c.keyword;
+  if (c.quote){ const q = el.querySelector('.q'); q.hidden = false; q.textContent = '「' + c.quote + '」'; }
+  if (c.reason) el.title = 'AIが選んだ理由：' + c.reason;
+  if (c.mention > 1){ const b = document.createElement('span'); b.className = 'cnt'; b.textContent = '×' + c.mention; el.appendChild(b); }
+  if (c.place === 'sheet'){ el.style.left = c.x + '%'; el.style.top = c.y + '%'; }
+  el.querySelector('.x').onclick = e => { e.stopPropagation(); c.place = 'deleted'; log('delete', c); render(); save(); };
+  el.addEventListener('dblclick', () => editCard(c, el));
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' && document.activeElement === el) editCard(c, el); });
+  enableDrag(el, c);
+  return el;
+}
+function editCard(c, el){
+  const kw = el.querySelector('.kw');
+  kw.contentEditable = 'true'; kw.focus();
+  const range = document.createRange(); range.selectNodeContents(kw); range.collapse(false);
+  const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  const done = () => {
+    kw.contentEditable = 'false';
+    const v = kw.textContent.trim();
+    if (v && v !== c.keyword){ log('edit', c, {from: c.keyword}); c.keyword = v; c.edited = true; save(); }
+    kw.textContent = c.keyword; paintStats();
+  };
+  kw.addEventListener('blur', done, {once: true});
+  kw.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); kw.blur(); } });
+}
+function render(){
+  const list = $('list'), body = $('body');
+  list.querySelectorAll('.card').forEach(n => n.remove());
+  body.querySelectorAll('.card').forEach(n => n.remove());
+  // トレイは新しいものが上
+  S.cards.filter(c => c.place === 'tray').slice().reverse().forEach(c => list.appendChild(cardEl(c)));
+  S.cards.filter(c => c.place === 'sheet').forEach(c => body.appendChild(cardEl(c)));
+  requestAnimationFrame(() => document.querySelectorAll('.card.new').forEach(n => n.classList.remove('new')));
+  let e = list.querySelector('.empty');
+  if (!list.querySelector('.card')){
+    if (!e){ e = document.createElement('div'); e.className = 'empty'; list.appendChild(e); }
+    e.innerHTML = S.cycle ? 'トレイのカードはすべてシートに置きました' : 'まだカードはありません<br>「録音をはじめる」を押すと、話し合いからカードが届きます';
+  } else if (e) e.remove();
+  $('bodyHint').hidden = !!body.querySelector('.card');
+  paintStats();
+}
+
+// 新しいカードが届いたとき
+function deliver(newCards){
+  // 入れ替え：置かれなかったAIカードを下げる（データには残す）
+  S.cards.filter(c => c.place === 'tray' && c.source === 'ai').forEach(c => { c.place = 'archived'; log('swap', c); });
+  let added = 0;
+  S.cycle++;
+  newCards.forEach(n => {
+    const live = S.cards.find(c => (c.place === 'sheet' || c.place === 'tray') && similar(c.keyword, n.keyword));
+    if (live){ live.mention = (live.mention || 1) + 1; log('bump', live); return; }
+    const old = S.cards.find(c => c.place === 'archived' && similar(c.keyword, n.keyword));
+    if (old){ old.place = 'tray'; old.mention = (old.mention || 1) + 1; old.batch = S.cycle; log('revive', old); added++; return; }
+    const c = {id: 'c' + (++uid) + '_' + Date.now().toString(36), keyword: n.keyword, quote: n.quote || '', kind: n.kind || 'topic', lone: !!n.lone,
+               type: n.type || '', thought: n.thought || '', reason: n.reason || '', source: 'ai', place: 'tray', x: 0, y: 0, mention: 1,
+               addedAt: nowISO(), batch: S.cycle};
+    S.cards.push(c); log('deliver', c, {kind: c.kind}); added++;
+  });
+  render(); save();
+  toast(added ? `カードが ${added} 枚届きました` : '新しいカードはありませんでした（同じ話題は ×回数 が増えています）');
+}
+
+$('manualForm').onsubmit = e => {
+  e.preventDefault();
+  const v = $('manualInput').value.trim(); if (!v) return;
+  const c = {id: 'm' + (++uid) + '_' + Date.now().toString(36), keyword: v, quote: '', kind: 'manual', lone: false, source: 'manual', place: 'tray', x: 0, y: 0, mention: 1, addedAt: nowISO()};
+  S.cards.push(c); log('manual', c);
+  $('manualInput').value = ''; render(); save();
+};
+
+// ドラッグ（マウス・タッチ・ペン共通）
+function enableDrag(el, c){
+  el.addEventListener('pointerdown', ev => {
+    if (ev.button !== 0 || ev.target.closest('.x') || ev.target.isContentEditable) return;
+    const startX = ev.clientX, startY = ev.clientY;
+    const r = el.getBoundingClientRect();
+    const offX = ev.clientX - r.left, offY = ev.clientY - r.top;
+    const body = $('body');
+    let ghost = null;
+    const inBody = (x, y) => { const b = body.getBoundingClientRect(); return x >= b.left && x <= b.right && y >= b.top && y <= b.bottom; };
+    const move = e => {
+      if (!ghost){
+        if (Math.hypot(e.clientX - startX, e.clientY - startY) < 5) return;   // クリック・ダブルクリックと区別
+        ghost = el.cloneNode(true); ghost.classList.add('dragging'); ghost.classList.remove('new');
+        Object.assign(ghost.style, {position:'fixed', left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', margin: 0, pointerEvents: 'none'});
+        document.body.appendChild(ghost); el.style.opacity = '.35';
+      }
+      ghost.style.left = (e.clientX - offX) + 'px'; ghost.style.top = (e.clientY - offY) + 'px';
+      body.classList.toggle('drop', inBody(e.clientX, e.clientY));
+    };
+    const up = e => {
+      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up);
+      if (!ghost) return;
+      ghost.remove(); el.style.opacity = ''; body.classList.remove('drop');
+      if (!inBody(e.clientX, e.clientY)) return;
+      const b = body.getBoundingClientRect();
+      const cardPct = $('sheet').getBoundingClientRect().width * 0.18 / b.width * 100;
+      const x = Math.max(0, Math.min((e.clientX - offX - b.left) / b.width * 100, 100 - cardPct));
+      const y = Math.max(0, Math.min((e.clientY - offY - b.top) / b.height * 100, 88));
+      const fromTray = c.place === 'tray';
+      c.x = +x.toFixed(2); c.y = +y.toFixed(2); c.place = 'sheet';
+      log(fromTray ? 'place' : 'move', c, fromTray ? {secToPlace: Math.round((Date.now() - Date.parse(c.addedAt)) / 1000)} : undefined);
+      render(); save();
+    };
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+  });
+}
+
+function paintStats(){
+  const ai = S.cards.filter(c => c.source === 'ai');
+  const gen = S.events.filter(e => e.ev === 'deliver').length;
+  const placedIds = new Set(S.events.filter(e => e.ev === 'place').map(e => e.id));
+  const placed = ai.filter(c => placedIds.has(c.id)).length;
+  $('sGen').textContent = gen; $('sPlaced').textContent = placed;
+  $('sEdit').textContent = S.events.filter(e => e.ev === 'edit').length;
+  $('sManual').textContent = S.cards.filter(c => c.source === 'manual').length;
+  const rate = gen ? Math.round(placed / gen * 100) : null;
+  $('sRate').textContent = rate === null ? '–' : rate + '%';
+  $('sMeter').style.width = (rate || 0) + '%';
+}
+
+// ================= 録音とカード生成 =================
+// マイクは1回だけ取得し、90秒ごとにレコーダーを切り替える。
+// 新しいレコーダーを先に start してから古い方を stop するので、区切りで音声が抜けない。
+let stream = null, recorder = null, audioCtx = null, analyser = null;
+let recording = false, segTimer = null, tickTimer = null, tlTimer = null;
+let nextCardAt = 0, extracting = false;
+let transcribeChain = Promise.resolve();
+let pendingTranscribes = 0;
+
+function intervalMin(){ if (QUICK) return 1; const p = S.plan; return p === '3-10' ? (S.cycle === 0 ? 3 : 10) : +p; }
+function scheduleNextCard(){ nextCardAt = Date.now() + intervalMin() * 60 * 1000; }
+
+function newRecorder(){
+  const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+  const r = new MediaRecorder(stream, mime ? {mimeType: mime} : undefined);
+  r._t0 = Date.now();                                          // 研究用：この区間の録音開始時刻
+  const chunks = [];
+  r.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  r.onstop = () => {
+    const t0 = r._t0, t1 = Date.now();
+    const blob = new Blob(chunks, {type: r.mimeType || 'audio/webm'});
+    if (blob.size < 2000){ log('seg_empty', null, {seg_start: t0, seg_end: t1, bytes: blob.size}); return; }   // ほぼ無音・極短
+    pendingTranscribes++; paintRec();
+    transcribeChain = transcribeChain.then(() => transcribe(blob, t0, t1)).finally(() => { pendingTranscribes--; paintRec(); });
+  };
+  return r;
+}
+function rotate(){
+  if (!recording) return;
+  const old = recorder;
+  recorder = newRecorder(); recorder.start();
+  if (old && old.state !== 'inactive') old.stop();
+}
+async function transcribe(blob, segStart, segEnd){
+  const fd = new FormData();
+  fd.append('audio', blob, 'segment.webm');
+  fd.append('session_id', S.session_id);
+  fd.append('hint', 'generic');
+  const url = S.voice.enabled ? '/api/transcribe_diarize' : '/api/transcribe_with_speakers';
+  for (let attempt = 0; attempt < 2; attempt++){
+    try {
+      const res = await fetch(url, {method: 'POST', body: fd});
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || res.status);
+      let text = (data.text || '').trim();
+      if (data.diarized && (data.segments || []).length){
+        // カード選びのAIには「話者1：」の形で渡す（名前ではなく区別だけ）。「ちがい」「ひとことだけ出た」の判断に使う
+        text = data.segments.filter(g => g.text).map(g => (SPEAKER_NO[g.speaker] ? '話者' + SPEAKER_NO[g.speaker] : '話者?') + '：' + g.text).join('\n');
+        S.speech.push({t: Date.now(), seg_start: segStart, seg_end: segEnd, sec: data.speech_sec || {}});
+        paintBalance();
+      } else if (S.voice.enabled){
+        log('seg_nodiarize', null, {seg_start: segStart, seg_end: segEnd, warning: data.warning || ''});
+        if (data.warning && !warnedDiarize){ warnedDiarize = true; banner('話のバランスを一部計算できませんでした（カードはそのまま届きます）'); }
+      }
+      if (text){ S.transcript.push({t: nowISO(), seg_start: segStart, seg_end: segEnd, diarized: !!data.diarized, text, segments: data.segments || []}); S.pendingText += (S.pendingText ? '\n' : '') + text; }
+      save();
+      return;
+    } catch (e) {
+      if (attempt === 1){ console.warn('transcribe', e); log('seg_fail', null, {seg_start: segStart, seg_end: segEnd, error: String(e && e.message || e).slice(0, 120)}); save(); banner('音声の文字起こしに失敗しました。録音は続いています。ネットワークを確認してください。'); }
+      else await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+}
+async function makeCards(trigger){
+  if (extracting) return;
+  extracting = true; paintRec();
+  try {
+    rotate();                                                    // いまの区間を区切って文字起こしへ
+    await new Promise(r => setTimeout(r, 300));
+    await transcribeChain;                                       // それまでの文字起こしを待つ
+    const memo = S.pendingText.trim();
+    if (memo.length < 20){
+      if (trigger === 'now') toast('まだカードにできるほどの話が録れていません');
+      return;
+    }
+    const existing = S.cards.filter(c => c.place === 'sheet' || c.place === 'tray').map(c => c.keyword);
+    const res = await fetch('/api/extract_cards', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({memo, prev_text: S.lastExtracted.slice(-500), existing, first_cycle: S.cycle === 0, max_cards: MAX_CARDS, task_hint: S.task_hint})});
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || res.status);
+    S.lastExtracted = memo; S.pendingText = '';
+    log('cards', null, {trigger, count: (data.cards || []).length, chars: memo.length});
+    deliver(data.cards || []);
+  } catch (e) {
+    console.warn('makeCards', e);
+    banner('カードを作れませんでした。話し合いはそのまま続けてください。次の間隔でもう一度試します。');
+  } finally {
+    extracting = false;
+    if (recording) scheduleNextCard();
+    paintRec();
+  }
+}
+
+async function startRecording(){
+  try {
+    if (!stream) stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true}});
+  } catch (e) {
+    banner('マイクが使えません。ブラウザのマイクの許可を確認してください。');
+    return;
+  }
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser(); analyser.fftSize = 256;
+  audioCtx.createMediaStreamSource(stream).connect(analyser);
+  recording = true;
+  if (!S.recStartedAt) S.recStartedAt = Date.now();
+  recorder = newRecorder(); recorder.start();
+  segTimer = setInterval(rotate, SEGMENT_MS);
+  scheduleNextCard();
+  tickTimer = setInterval(() => { if (recording && !extracting && Date.now() >= nextCardAt) makeCards('auto'); paintRec(); }, 1000);
+  tlTimer = setInterval(captureTimelapse, TIMELAPSE_MS);
+  captureTimelapse();
+  log('rec_start'); meterLoop(); paintRec(); save();
+}
+function stopRecording(){
+  recording = false;
+  clearInterval(segTimer); clearInterval(tickTimer); clearInterval(tlTimer);
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+  recorder = null;
+  if (stream){ stream.getTracks().forEach(t => t.stop()); stream = null; }
+  if (audioCtx){ try { audioCtx.close(); } catch (_) {} audioCtx = null; analyser = null; }
+  $('level').style.width = '0';
+  log('rec_stop'); paintRec(); save();
+}
+$('recBtn').onclick = () => recording ? stopRecording() : startRecording();
+$('nowBtn').onclick = () => { log('now'); if (recording) makeCards('now'); else if (S.pendingText.trim()) makeCardsStopped(); else toast('録音をはじめると、いまの話をカードにできます'); };
+async function makeCardsStopped(){
+  // 止めた後でも、まだカードにしていない話があればカードにできる
+  const wasRec = recording; recording = false;
+  await makeCards('now'); recording = wasRec;
+}
+$('intervalSel').onchange = () => { S.plan = $('intervalSel').value; if (recording) scheduleNextCard(); paintRec(); save(); };
+
+function meterLoop(){
+  if (!analyser) return;
+  const d = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(d);
+  const avg = d.reduce((a, b) => a + b, 0) / d.length / 255;
+  $('level').style.width = Math.min(100, avg * 400) + '%';
+  requestAnimationFrame(meterLoop);
+}
+const fmt = s => Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+function paintRec(){
+  $('rec').classList.toggle('on', recording);
+  $('recLabel').textContent = recording ? '録音を止める' : '録音をはじめる';
+  let st;
+  if (extracting) st = 'カードを作っています…';
+  else if (recording) st = '聞き取り中 ・ 次のカードまで ' + fmt(Math.max(0, Math.ceil((nextCardAt - Date.now()) / 1000)));
+  else st = S.pendingText.trim() ? '止まっています（まだカードにしていない話があります）' : '止まっています';
+  $('recState').textContent = st;
+  $('nowBtn').disabled = extracting;
+}
+
+// ================= 研究用：タイムラプス =================
+async function captureTimelapse(){
+  if (typeof html2canvas === 'undefined' || !S.session_id) return;
+  try {
+    const cv = await html2canvas($('sheet'), {scale: 0.6, logging: false, useCORS: true});
+    await fetch('/api/save_timelapse', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({session_id: S.session_id, image: cv.toDataURL('image/png')})});
+  } catch (e) { console.warn('timelapse', e); }
+}
+
+// ================= 保存と復元 =================
+let saveTimer = null;
+function snapshot(){
+  return {
+    ...S,
+    template: 'kadai', mode: 'kadai', aiSupport: true,
+    title: '課題' + S.kadai_no,
+    memo: S.transcript.map(x => x.text).join('\n'),
+    // 管理画面（admin）の集計と互換の形
+    notes: S.cards.filter(c => c.place !== 'deleted').map(c => ({keyword: c.keyword, quote: c.quote, x: c.x, y: c.y,
+      area: c.place === 'sheet' ? 'sheet' : 'unplaced', phase: 'kadai', source: c.source, type: c.type, thought: c.thought,
+      kind: c.kind, importance: (c.kind === 'question' || c.kind === 'difference') ? 'high' : 'medium',
+      addedAt: c.addedAt, mentionCount: String(c.mention || 1), archived: c.place === 'archived' ? 'true' : ''})),
+    savedAt: nowISO()
+  };
+}
+function save(){
+  if (!S.session_id) return;
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(snapshot())); } catch (_) {}
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      const res = await fetch('/api/save_session', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(snapshot())});
+      if (!res.ok) throw new Error(res.status);
+    } catch (e) { console.warn('save', e); }
+  }, 2000);
+}
+function restore(d){
+  const keys = ['session_id','group_number','kadai_no','task_hint','leader_id','members','cards','events','transcript','plan','cycle','lastExtracted','pendingText','created_at','voice','speech','balTrace','recStartedAt'];
+  keys.forEach(k => { if (d[k] !== undefined) S[k] = d[k]; });
+  uid = S.cards.length;
+  applyHeader(); render(); paintBalance();
+}
+function applyHeader(){
+  $('kadaiNo').value = S.kadai_no; $('leaderId').value = S.leader_id || '';
+  $('groupBadge').textContent = S.group_number + '班'; $('groupBadge').hidden = !S.group_number;
+  $('intervalSel').value = S.plan; renderMembers(); paintRec();
+}
+$('kadaiNo').oninput = () => { S.kadai_no = $('kadaiNo').value.trim(); save(); };
+$('leaderId').oninput = () => { S.leader_id = $('leaderId').value.trim(); save(); };
+
+// 開始画面
+function stamp(){ const d = new Date(), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
+$('startForm').onsubmit = e => {
+  e.preventDefault();
+  const g = $('startGroup').value.trim(), k = $('startKadai').value.trim() || '1-1';
+  Object.assign(S, {group_number: g, kadai_no: k, task_hint: $('startHint').value.trim(), created_at: nowISO(),
+    session_id: `kadai_${g}班_${k}_${stamp()}`, cards: [], events: [], transcript: [], cycle: 0, lastExtracted: '', pendingText: '',
+    members: [{name: '', role: 'leader'}], leader_id: '', plan: $('intervalSel').value,
+    voice: {enabled: false, slots: {}}, speech: [], balTrace: [], recStartedAt: 0});
+  lastBalState = ''; nudgeShown = false; offSince = null; nudgeSnoozeUntil = 0;
+  log('session_start', null, {config: {quick: QUICK, segment_ms: SEGMENT_MS, max_cards: MAX_CARDS, plan: S.plan,
+    bal_window_ms: BAL_WINDOW, bal_threshold: BAL_THRESHOLD, quiet_share: QUIET_SHARE, bal_min_speech: BAL_MIN_SPEECH,
+    bal_warmup_ms: BAL_WARMUP, nudge_snooze_ms: NUDGE_SNOOZE, ua: navigator.userAgent.slice(0, 120)}});
+  $('startOverlay').hidden = true;
+  applyHeader(); render(); paintBalance(); save();
+  openVoice();
+};
+let saved = null;
+try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (_) {}
+if (saved && saved.session_id){
+  const b = $('resumeBtn'); b.hidden = false;
+  b.textContent = `続きから再開：${saved.group_number}班・課題${saved.kadai_no}（カード${(saved.cards||[]).filter(c => c.place === 'sheet').length}枚）`;
+  b.onclick = () => { restore(saved); $('startOverlay').hidden = true; toast('前回の続きから再開しました'); };
+  $('startGroup').value = saved.group_number || '';
+}
+const qs = new URLSearchParams(location.search).get('session');
+if (qs){
+  fetch('/api/get_session/' + encodeURIComponent(qs)).then(r => r.json()).then(d => {
+    if (d.ok && d.session){ restore(d.session); $('startOverlay').hidden = true; }
+  }).catch(() => {});
+}
+$('newBtn').onclick = () => {
+  if (recording) stopRecording();
+  // 声のサンプルはシートを閉じたら消す
+  if (S.session_id) fetch('/api/delete_voices', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({session_id: S.session_id})}).catch(() => {});
+  $('startOverlay').hidden = false; $('resumeBtn').hidden = true;
+  $('startGroup').value = S.group_number || ''; $('startKadai').value = S.kadai_no || '1-1';
+};
+
+// ================= 声の登録 =================
+const SLOTS = ['v1', 'v2', 'v3', 'v4'];
+const SPEAKER_NO = {v1: 1, v2: 2, v3: 3, v4: 4};
+let warnedDiarize = false, voiceRecSlot = null;
+function openVoice(){
+  // シートのメンバ名を初期値にする
+  SLOTS.forEach((v, i) => {
+    const sl = S.voice.slots[v] || (S.voice.slots[v] = {name: '', done: false});
+    if (!sl.name && S.members[i] && S.members[i].name) sl.name = S.members[i].name;
+  });
+  renderVoice(); $('voiceOverlay').hidden = false;
+}
+function renderVoice(){
+  const box = $('voicePeople'); box.innerHTML = '';
+  SLOTS.forEach((v, i) => {
+    const sl = S.voice.slots[v];
+    const row = document.createElement('div'); row.className = 'person';
+    const busy = voiceRecSlot === v;
+    row.innerHTML = `<span class="swatch" style="--c:var(--${v})">${i + 1}</span>
+      <div><input placeholder="名前（例：山田）" aria-label="${i + 1}人目の名前"><div class="pstate"></div></div>
+      <button type="button" class="rbtn"></button>`;
+    const inp = row.querySelector('input'); inp.value = sl.name || '';
+    inp.oninput = () => { sl.name = inp.value.trim(); };
+    const st = row.querySelector('.pstate');
+    st.textContent = busy ? '録音中… 読み上げてください' : sl.err ? sl.err : sl.done ? '登録できました ✓ この色です' : 'まだ登録していません';
+    st.className = 'pstate' + (sl.done && !busy ? ' done' : '') + (sl.err && !busy ? ' err' : '');
+    const btn = row.querySelector('button');
+    btn.textContent = busy ? '録っています…' : sl.done ? 'もう一度録る' : '🎙 録る';
+    btn.classList.toggle('rec', busy); btn.disabled = !!voiceRecSlot && !busy;
+    btn.onclick = () => recordVoice(v);
+    box.appendChild(row);
+  });
+  $('scriptName').textContent = voiceRecSlot ? (S.voice.slots[voiceRecSlot].name || '〇〇') : '〇〇';
+  $('voiceGo').disabled = !$('agree').checked || !SLOTS.some(v => S.voice.slots[v].done) || !!voiceRecSlot;
+}
+async function recordVoice(v){
+  if (voiceRecSlot) return;
+  if (!$('agree').checked){ $('consentLabel').classList.add('warn'); $('agree').focus(); return; }
+  const sl = S.voice.slots[v]; sl.err = '';
+  let st;
+  try { st = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true}}); }
+  catch (e) { sl.err = 'マイクが使えません。ブラウザの許可を確認してください'; renderVoice(); return; }
+  voiceRecSlot = v; renderVoice();
+  const r = new MediaRecorder(st); const chunks = [];
+  r.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  r.onstop = async () => {
+    st.getTracks().forEach(t => t.stop());
+    const fd = new FormData();
+    fd.append('audio', new Blob(chunks, {type: r.mimeType || 'audio/webm'}), 'voice.webm');
+    fd.append('session_id', S.session_id); fd.append('slot', v);
+    try {
+      const res = await fetch('/api/register_voice', {method: 'POST', body: fd});
+      const d = await res.json();
+      if (!res.ok || !d.ok) throw new Error(d.error || res.status);
+      sl.done = true; log('voice_registered', null, {slot: v, sec: d.seconds});
+    } catch (e) { sl.done = false; sl.err = '登録できませんでした：' + e.message; }
+    voiceRecSlot = null; renderVoice(); save();
+  };
+  r.start(); setTimeout(() => r.state !== 'inactive' && r.stop(), 5500);
+}
+$('agree').onchange = () => { $('consentLabel').classList.remove('warn'); renderVoice(); };
+function finishVoice(enabled){
+  // 入力された名前をシートのメンバ欄に反映（役割は今の設定を残す）
+  SLOTS.forEach((v, i) => {
+    const name = (S.voice.slots[v].name || '').trim(); if (!name) return;
+    if (S.members[i]) S.members[i].name = name; else S.members.push({name, role: ''});
+  });
+  if (S.members.length > 1) S.members = S.members.filter(m => m.name);
+  S.voice.enabled = enabled && SLOTS.some(v => S.voice.slots[v].done);
+  log(S.voice.enabled ? 'voice_on' : 'voice_off', null, {slots: SLOTS.filter(v => S.voice.slots[v].done)});
+  $('voiceOverlay').hidden = true;
+  renderMembers(); paintBalance(); save();
+}
+$('voiceGo').onclick = () => finishVoice(true);
+$('voiceSkip').onclick = () => finishVoice(false);
+$('reRegBtn').onclick = () => { if (recording) toast('録音を止めてから登録しなおしてください'); else openVoice(); };
+
+// ================= 話のバランス =================
+// 研究の主指標「発話量均衡度」と同じ考え方（各話者の話した時間の割合 → 正規化エントロピー、1=均等）を直近10分に当てる。
+// 名前は出さず色だけ。ふだんはバーだけで、偏ったときだけ1行のお知らせを出す。
+const BAL_WINDOW = 10 * 60 * 1000, BAL_THRESHOLD = 0.85, QUIET_SHARE = 0.03;
+const BAL_MIN_SPEECH = QUICK ? 15 : 60, BAL_WARMUP = (QUICK ? 1 : 5) * 60 * 1000, NUDGE_SNOOZE = 5 * 60 * 1000;
+let nudgeSnoozeUntil = 0, lastBalState = '', nudgeShown = false, offSince = null;
+function balanceNow(){
+  const since = Date.now() - BAL_WINDOW;
+  const reg = SLOTS.filter(v => S.voice.slots[v] && S.voice.slots[v].done);
+  const sum = {other: 0}; reg.forEach(v => sum[v] = 0);
+  S.speech.filter(x => x.t >= since).forEach(x => Object.entries(x.sec || {}).forEach(([k, sec]) => {
+    if (k in sum) sum[k] += sec; else sum.other += sec;
+  }));
+  const regTotal = reg.reduce((a, v) => a + sum[v], 0);
+  let b = null;
+  if (reg.length >= 2 && regTotal > 0){
+    const h = reg.reduce((a, v) => { const q = sum[v] / regTotal; return q > 0 ? a - q * Math.log(q) : a; }, 0);
+    b = h / Math.log(reg.length);
+  }
+  const quiet = reg.filter(v => regTotal > 0 && sum[v] / regTotal < QUIET_SHARE);
+  const most = reg.slice().sort((a, c) => sum[c] - sum[a])[0];
+  const ready = regTotal >= BAL_MIN_SPEECH && !!S.recStartedAt && Date.now() - S.recStartedAt >= BAL_WARMUP;
+  return {reg, sum, regTotal, b, quiet, most, ready, off: ready && b !== null && (b < BAL_THRESHOLD || quiet.length > 0)};
+}
+function paintBalance(){
+  $('balance').hidden = !S.voice.enabled;
+  if (!S.voice.enabled) return;
+  const r = balanceNow();
+  const bar = $('bbar'); bar.innerHTML = '';
+  [...r.reg, 'other'].forEach(v => {
+    if (!r.sum[v]) return;
+    const seg = document.createElement('i'); seg.style.setProperty('--c', `var(--${v})`); seg.style.flexGrow = r.sum[v]; bar.appendChild(seg);
+  });
+  bar.setAttribute('aria-label', r.b === null ? '直近10分の話した量の割合' : `直近10分の話した量の割合（均衡度 ${r.b.toFixed(2)}）`);
+  $('bkeys').innerHTML = r.reg.map(v => `<span style="--c:var(--${v})"></span>`).join('');
+  const msg = $('bmsg');
+  const state = r.reg.length < 2 ? 'single' : !r.ready ? 'wait' : r.off ? 'off' : 'calm';
+  // 研究用：判定（state）と、実際に画面に出したか（nudgeShown）を分けて残す
+  const shares = {};
+  r.reg.forEach(v => shares[v] = r.regTotal ? +(r.sum[v] / r.regTotal).toFixed(3) : 0);
+  const bval = r.b === null ? null : +r.b.toFixed(3);
+  if (state !== lastBalState){
+    log('balance_judge', null, {from: lastBalState || null, to: state, b: bval, quiet: r.quiet, shares});
+    offSince = state === 'off' ? nowISO() : null;
+  }
+  lastBalState = state;
+  if (recording) S.balTrace.push({t: Date.now(), state, b: bval, shares});
+  const showNudge = state === 'off' && Date.now() >= nudgeSnoozeUntil;
+  if (showNudge && !nudgeShown){ nudgeShown = true; log('balance_notice', null, {b: bval, quiet: r.quiet, shares, judged_at: offSince}); save(); }
+  else if (!showNudge && nudgeShown){ nudgeShown = false; log('balance_hidden', null, {reason: state === 'off' ? 'dismissed' : 'recovered', to: state}); save(); }
+  if (state === 'single'){ msg.className = 'bmsg wait'; msg.textContent = '2人以上の声を登録すると、話のバランスが見えてきます'; }
+  else if (state === 'wait'){ msg.className = 'bmsg wait'; msg.textContent = 'もう少し話すと、バランスが見えてきます'; }
+  else if (state === 'calm'){ msg.className = 'bmsg calm'; msg.textContent = 'いい感じに、みんなの声が入っています'; }
+  else if (!showNudge){ msg.className = ''; msg.textContent = ''; }
+  else {
+    const low = r.quiet.length ? r.quiet : r.reg.slice().sort((a, c) => r.sum[a] - r.sum[c]).slice(0, Math.max(1, r.reg.length - 2));
+    msg.className = 'bmsg nudge';
+    msg.innerHTML = `<span>最近は <span class="dots"><b style="--c:var(--${r.most})"></b></span> の人の話が多めです。<span class="dots">${low.map(v => `<b style="--c:var(--${v})"></b>`).join('')}</span> の人の考えも聞いてみませんか？</span><button type="button">閉じる</button>`;
+    msg.querySelector('button').onclick = () => { nudgeSnoozeUntil = Date.now() + NUDGE_SNOOZE; log('balance_dismiss'); paintBalance(); };
+  }
+}
+setInterval(() => { if (S.voice.enabled) paintBalance(); }, 15000);
+
+// ================= PowerPoint 書き出し =================
+$('exportBtn').onclick = async () => {
+  const btn = $('exportBtn'); btn.disabled = true; btn.textContent = '書き出し中…';
+  try {
+    const res = await fetch('/api/export_kadai_pptx', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({kadai_no: S.kadai_no, leader_id: S.leader_id, group_number: S.group_number,
+        members: S.members.filter(m => m.name), cards: S.cards.filter(c => c.place === 'sheet').map(c => ({keyword: c.keyword, x: c.x, y: c.y}))})});
+    if (!res.ok){ let msg = ''; try { msg = (await res.json()).error; } catch (_) {} throw new Error(msg || res.status); }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    // 日本語のファイル名は環境によって「download」になってしまうため英数字にする
+    a.download = `kadai${S.kadai_no}${S.group_number ? '_group' + S.group_number : ''}.pptx`.replace(/[^\w.\-]/g, '_');
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    log('export', null, {cards: S.cards.filter(c => c.place === 'sheet').length}); save();
+    toast('PowerPointを書き出しました');
+  } catch (e) {
+    banner('書き出しに失敗しました：' + e.message);
+  } finally { btn.disabled = false; btn.textContent = 'PowerPointで書き出す'; }
+};
+
+window.addEventListener('beforeunload', e => { if (recording){ e.preventDefault(); e.returnValue = ''; } });
+
+// テスト・デバッグ用に最小限だけ公開
+window.GraRecKadai = {S, deliver, makeCards, rotate, render, paintBalance, balanceNow, openVoice};
+
+renderMembers(); render(); paintRec();
+if (QUICK) banner('テストモード：30秒ごとに文字起こし、1分ごとにカード、バランスの判定は1分後から（本番では ?quick を外す）');
+})();
+</script>
+</body>
+</html>

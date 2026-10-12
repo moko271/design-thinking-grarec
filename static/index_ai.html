@@ -2079,6 +2079,8 @@ const AUTO_INTERVAL              = 180000; // 3分（面談カード生成・タ
 const QUANTUM_FIRST_INTERVAL     = 180000; // 3分（量子：最初のキーワード抽出サイクル）
 const QUANTUM_LONG_INTERVAL      = 600000; // 10分（量子：2回目以降のキーワード抽出サイクル）
 const QUANTUM_TRANSCRIBE_INTERVAL =  90000; // 90秒（量子：文字起こしのみ行う短い録音区切り）
+// 直前のキーワード抽出に使ったテキスト（次の抽出で「前の文脈」として渡す）
+let _lastExtractedText = '';
 
 // ===== mentionCount：重複カード検出 =====
 function normalizeKw(kw) {
@@ -2100,6 +2102,15 @@ function findDuplicateNote(kw) {
     if (isSimilarKw(kw, note.dataset.keyword || '')) return note;
   }
   return null;
+}
+// 退避済みカードと同じ話題がまた出た → 未配置ゾーンの空き位置に戻す（言及回数は引き継ぐ）
+function reviveArchivedNote(note) {
+  const pos = getNextUnplacedPosition();
+  delete note.dataset.archived;
+  note.style.left = pos.x + 'px';
+  note.style.top  = pos.y + 'px';
+  note.dataset.phase = currentPhase;   // 今のフェーズで再び話題になったので今のフェーズに出す
+  note.style.display = 'block';
 }
 function applyMentionStyle(note) {
   const cnt = parseInt(note.dataset.mentionCount || '1');
@@ -2510,6 +2521,8 @@ function applyAiSupportMode() {
 function updateNotesVisibility() {
   document.querySelectorAll(".note").forEach(note => {
     const notePhase = note.dataset.phase || "";
+    // 退避済み（入れ替えで下げた）カードは常に非表示
+    if (note.dataset.archived === "true") { note.style.display = "none"; return; }
     // フェーズが未設定のカードは常時表示（後方互換）
     note.style.display = (!notePhase || notePhase === currentPhase) ? "block" : "none";
   });
@@ -2971,9 +2984,27 @@ startRecordBtn.onclick = async () => {
 
       const wasAutoSegment = _isAutoSegment;
       _isAutoSegment = false;
+      const permanentStop = _permanentStop;
+      _permanentStop = false;
 
       const blob = new Blob(recordedChunks, { type: "audio/webm" });
       recordedChunks = [];
+
+      // このセグメントのレコーダー・マイク・AudioContextを手元に保持しておく
+      // （次のセグメントを即開始すると、グローバル変数は新しいものに置き換わるため）
+      const thisRecorder = mediaRecorder;
+      const thisAudioContext = audioContext;
+
+      // ── 録音の空白をなくす ──
+      // 以前は文字起こし・キーワード抽出が終わってから次の録音を始めていたため、
+      // 区切りごとに15〜28秒の音声が録れていなかった（7/15実験で全体の約15〜20%）。
+      // 次のセグメントの録音を先に始め、文字起こしは裏で並行して進める。
+      const continueRecording = wasAutoSegment && !permanentStop;
+      if (continueRecording) {
+        _isAutoSegment = true;
+        startRecordBtn.disabled = false;
+        startRecordBtn.click();
+      }
 
       recordStatus.textContent = "録音終了。文字起こし中…";
       try {
@@ -3055,6 +3086,7 @@ startRecordBtn.onclick = async () => {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 memo: textForExtraction, phase: currentPhase,
+                prev_text: _lastExtractedText.slice(-500),
                 template: currentTemplate || "", areas: getCustomAreas(),
                 // 量子2回目以降（10分サイクル）は重要度フィルタを強化
                 long_segment: window.quantumMode && _quantumSegmentCount > 0
@@ -3076,6 +3108,7 @@ startRecordBtn.onclick = async () => {
               });
               saveSession();
             }
+            _lastExtractedText = textForExtraction;
           } catch(e) {
             console.warn('AI抽出エラー:', e);
           }
@@ -3095,25 +3128,19 @@ startRecordBtn.onclick = async () => {
         showApiError();
         recordStatus.textContent = "⚠️ 通信エラーが発生しました";
       } finally {
-        if (mediaRecorder && mediaRecorder.stream) {
-          mediaRecorder.stream.getTracks().forEach((t) => t.stop());
+        // このセグメントのマイク・AudioContextだけを片付ける（次のセグメントのものは触らない）
+        if (thisRecorder && thisRecorder.stream) {
+          thisRecorder.stream.getTracks().forEach((t) => t.stop());
         }
-        mediaRecorder = null;
-        if (audioContext) {
-          audioContext.close();
-          audioContext = null;
+        if (mediaRecorder === thisRecorder) mediaRecorder = null;
+        if (thisAudioContext) {
+          try { thisAudioContext.close(); } catch (_) {}
+          if (audioContext === thisAudioContext) audioContext = null;
         }
-        if (wasAutoSegment && !_permanentStop) {
-          // 自動セグメント完了 → 新しいセグメントを自動開始
-          // disabled を外してから click() しないとブラウザが無視する
-          _isAutoSegment = true;
-          startRecordBtn.disabled = false;
-          setTimeout(() => startRecordBtn.click(), 500);
-        } else {
+        if (!continueRecording) {
           startRecordBtn.disabled = false;
           stopTimelapse();
         }
-        _permanentStop = false;
       }
     };
 
@@ -4488,7 +4515,11 @@ function placeNoteInArea(note, areaId) {
 function addKeywordCard(kw, emoji, quote, type, thought, who, what, when, speaker, importance, source) {
   // 重複チェック：似たカードがあれば言及回数を増やして終了
   const dup = findDuplicateNote(kw);
-  if (dup) { incrementMentionCount(dup); return dup; }
+  if (dup) {
+    if (dup.dataset.archived === 'true') reviveArchivedNote(dup);
+    incrementMentionCount(dup);
+    return dup;
+  }
   const pos = getNextUnplacedPosition();
   const note = createNote(
     kw, '', '', pos.x, pos.y,

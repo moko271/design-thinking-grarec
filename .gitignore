@@ -47,3 +47,19 @@ grarec_transcribe_tool/
 grarec_transcribe_tool/
 全班_文字起こし結果/
 *_文字起こし結果/
+
+# 声のサンプル（個人情報。コミットしない）
+data/voices/
+
+# シミュレーションの結果（文字起こし・カードの中身を含むので公開しない）
+/sim/out/
+sim/gold/班[0-9]*.csv
+# 通し確認の結果
+/tools/rehearsal_*.json
+/tools/rehearsal_*.pptx
+# 研究データ・監査用（個人情報を含みうる）
+/audit_2026-10-01/
+/da_eval/
+/da_validation/
+/data/
+/memory_comparison_result_*
