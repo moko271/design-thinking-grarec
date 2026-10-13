@@ -524,6 +524,7 @@ function renderMembers(){
   add.onclick = () => { S.members.push({name:'', role:''}); renderMembers(); editMember(S.members.length - 1, $('members').children[S.members.length - 1]); };
   box.appendChild(add);
 }
+const composing = e => e.isComposing || e.keyCode === 229;   // 日本語の変換中
 function editMember(i, btn){
   const inp = document.createElement('input');
   inp.value = S.members[i].name; inp.placeholder = '名前';
@@ -535,7 +536,7 @@ function editMember(i, btn){
     renderMembers(); save();
   };
   inp.addEventListener('blur', done, {once: true});
-  inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); });
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !composing(e)){ e.preventDefault(); inp.blur(); } });
 }
 
 // ================= カード =================
@@ -589,7 +590,7 @@ function editCard(c, el){
     kw.textContent = c.keyword; paintStats();
   };
   kw.addEventListener('blur', done, {once: true});
-  kw.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); kw.blur(); } });
+  kw.addEventListener('keydown', e => { if (e.key === 'Enter' && !composing(e)){ e.preventDefault(); kw.blur(); } });
 }
 function render(){
   ensureSlides();
@@ -738,7 +739,7 @@ function deleteSlide(id, btn){
 
 // ================= テキストボックス（PowerPointと同じ：置きたい所をクリックして文字を打つ） =================
 let textMode = false, selText = null, editingText = null;
-const DEFAULT_HINT = 'カードは右のトレイからドラッグ（左のスライドに落とすとそのスライドへ）。ダブルクリックで書き直せる';
+const DEFAULT_HINT = 'カードは右のトレイからドラッグ（左のスライドに落とすとそのスライドへ）。カードやメンバー名はダブルクリックで書き直せる';
 function placeText(el, t){
   el.style.left = t.x + '%'; el.style.top = t.y + '%'; el.style.width = t.w + '%';
   el.style.fontSize = (t.size * PT2CQW).toFixed(3) + 'cqw';
@@ -810,7 +811,7 @@ function startTextEdit(t, el){
   const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
   const before = t.created ? '' : t.text;
   delete t.created;
-  const key = e => { if (e.key === 'Escape'){ e.preventDefault(); tx.blur(); } };
+  const key = e => { if (e.key === 'Escape' && !composing(e)){ e.preventDefault(); tx.blur(); } };
   tx.addEventListener('keydown', key);
   tx.addEventListener('blur', () => {
     tx.removeEventListener('keydown', key);

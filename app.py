@@ -1014,6 +1014,35 @@ def serve_timelapse_img(session_id, filename):
     return send_from_directory(session_dir, filename)
 
 
+@app.route("/api/download_session_zip/<path:session_id>", methods=["GET"])
+@require_admin
+def download_session_zip(session_id):
+    """1つのセッションだけ：セッションJSON・録音・タイムラプスをまとめてZIPで"""
+    sid = _sanitize_session_id(session_id)
+    jpath = os.path.join(SESSIONS_DIR, f"{sid}.json")
+    if not os.path.exists(jpath):
+        return jsonify({"ok": False, "error": "session not found"}), 404
+    rec_prefix = "rec_" + re.sub(r'[^\w\-]', '_', session_id, flags=re.UNICODE)[:40] + "_"
+    buf = io.BytesIO()
+    n_rec = n_tl = 0
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.write(jpath, f"{sid}/session.json")
+        if os.path.isdir(RECORDINGS_DIR):
+            for fname in sorted(os.listdir(RECORDINGS_DIR)):
+                if fname.startswith(rec_prefix):
+                    zf.write(os.path.join(RECORDINGS_DIR, fname), f"{sid}/recordings/{fname}"); n_rec += 1
+        tdir = os.path.join(TIMELAPSE_DIR, sid)
+        if os.path.isdir(tdir):
+            for fname in sorted(os.listdir(tdir)):
+                if fname.endswith(".png"):
+                    zf.write(os.path.join(tdir, fname), f"{sid}/timelapse/{fname}"); n_tl += 1
+    buf.seek(0)
+    ascii_id = re.sub(r'[^\w\-]', '_', session_id, flags=re.ASCII)[:60]
+    cd = f"attachment; filename=\"session_{ascii_id}.zip\"; filename*=UTF-8''{urlquote(f'session_{sid}.zip', safe='')}"
+    print(f"セッションZIP: {sid} 録音{n_rec} タイムラプス{n_tl}")
+    return Response(buf.read(), mimetype="application/zip", headers={"Content-Disposition": cd})
+
+
 @app.route("/api/download_timelapse_zip/<path:session_id>", methods=["GET"])
 @require_admin
 def download_timelapse_zip(session_id):

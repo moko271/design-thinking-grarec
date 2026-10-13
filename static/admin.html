@@ -347,6 +347,10 @@ async function loadMendanSessions() {
           ／
           <button class="del-btn" style="background:#37474f;color:#fff;" data-sid="${esc(s.session_id)}" onclick="showRecordingsForSession(this, event)">録音</button>
           ／
+          <a href="/api/download_session_zip/${encodeURIComponent(s.session_id)}" onclick="event.stopPropagation()" title="このセッションのJSON・録音・タイムラプスだけをZIPで">
+            <button class="del-btn" style="background:#2e7d32;color:#fff;">このセッションだけZIP</button>
+          </a>
+          ／
           <button class="del-btn" data-sid="${esc(s.session_id)}" onclick="deleteSession(this, event)">削除</button>
         </td>`;
       tbody.appendChild(tr);
@@ -434,6 +438,10 @@ async function loadSessions() {
           </a>
           ／
           <button class="del-btn" style="background:#37474f;color:#fff;" data-sid="${esc(s.session_id)}" onclick="showRecordingsForSession(this, event)">録音</button>
+          ／
+          <a href="/api/download_session_zip/${encodeURIComponent(s.session_id)}" onclick="event.stopPropagation()" title="このセッションのJSON・録音・タイムラプスだけをZIPで">
+            <button class="del-btn" style="background:#2e7d32;color:#fff;">このセッションだけZIP</button>
+          </a>
           ／
           <button class="del-btn" data-sid="${esc(s.session_id)}" onclick="deleteSession(this, event)">削除</button>
         </td>`;
