@@ -126,6 +126,79 @@ button:disabled{cursor:not-allowed;opacity:.55}
 .manual-add input{flex:1;min-width:0;border:1px solid var(--line);background:var(--panel-2);border-radius:6px;padding:6px 8px}
 .manual-add button{border:1px solid var(--line);background:var(--panel-2);border-radius:6px;padding:6px 10px}
 
+/* スライドの一覧（PowerPointの左側） */
+.main{grid-template-columns:150px minmax(0,1fr) 300px}
+@media (max-width:1100px){.main{grid-template-columns:120px minmax(0,1fr) 260px}}
+.thumbs{display:flex;flex-direction:column;gap:10px;position:sticky;top:16px;max-height:calc(100vh - 110px);overflow:auto;padding:4px 6px 4px 0}
+.thumb{position:relative;display:grid;grid-template-columns:16px 1fr;gap:4px;align-items:start;cursor:pointer;outline:none}
+.thumb .no{font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums;text-align:right;padding-top:2px}
+.thumb .mini{pointer-events:none;border:2px solid transparent;border-radius:3px;box-shadow:0 1px 2px rgba(0,0,0,.22)}
+.thumb:hover .mini{border-color:#B8C2CF}
+.thumb.on .mini{border-color:var(--accent)}
+.thumb.on .no{color:var(--accent);font-weight:700}
+.thumb:focus-visible .mini{outline:2px solid var(--accent);outline-offset:2px}
+.thumb.drop .mini{border-color:var(--accent);background:var(--accent-soft)}
+.thumb .del{position:absolute;right:-4px;top:-6px;border:0;border-radius:999px;background:#fff;color:var(--ink-2);font-size:12px;line-height:1;padding:3px 6px;box-shadow:0 1px 3px rgba(0,0,0,.3);opacity:0}
+.thumb:hover .del,.thumb:focus-within .del,.thumb .del.confirm{opacity:1}
+.thumb .del.confirm{background:var(--rec);color:#fff;font-weight:700}
+.add-slide{margin-left:20px;border:1px dashed #9AA6B4;background:var(--panel);border-radius:6px;padding:8px 4px;font-size:12px;color:var(--ink-2)}
+.add-slide:hover{border-color:var(--accent);color:var(--accent)}
+.mini .m-head{position:absolute;left:2.2%;right:3%;top:3.5%;height:11%;background:var(--paper-cell)}
+.mini .m-head::before{content:"";position:absolute;left:0;right:0;top:0;height:38%;background:#000}
+.mini .m-head::after{content:"";position:absolute;left:-1%;top:15%;width:13%;height:60%;background:#fff}
+.mini .card{pointer-events:none}
+.mini .tbox{border-color:transparent}
+@media (max-width:900px){
+  .thumbs{position:static;flex-direction:row;overflow-x:auto;max-height:none;padding-bottom:6px}
+  .thumb{width:120px;flex:none}
+  .add-slide{margin-left:0;flex:none}
+}
+/* 道具（テキストボックス） */
+.tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-bottom:10px;font-size:12px;color:var(--ink-2)}
+.tool{border:1px solid var(--line);background:var(--panel-2);color:var(--ink);border-radius:7px;padding:5px 11px;font-size:13px}
+.tool:hover{border-color:var(--accent)}
+.tool.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:700}
+.tools label{display:flex;align-items:center;gap:6px}
+.tools select{border:1px solid var(--line);background:var(--panel-2);border-radius:7px;padding:4px 6px;font-size:13px}
+.tools .hint{flex:1;min-width:200px;text-align:right}
+.s-body.texting{cursor:crosshair}
+/* テキストボックス（PowerPointと同じく枠なし。選ぶと枠が出る） */
+.tbox{position:absolute;padding:.25cqw .45cqw;line-height:1.3;color:#111;font-family:"BIZ UDPGothic","Hiragino Sans",sans-serif;border:1px solid transparent;cursor:move;touch-action:none;user-select:none;z-index:2}
+.tbox .tx{white-space:pre-wrap;overflow-wrap:anywhere;min-height:1.3em;outline:none}
+.tbox:hover{border-color:#B8C2CF}
+.tbox.sel{border-color:var(--accent)}
+.tbox.editing{cursor:text;user-select:text;border-color:var(--accent);background:rgba(255,255,255,.6)}
+.tbox .rh{position:absolute;right:-6px;top:50%;width:10px;height:10px;margin-top:-5px;background:#fff;border:1px solid var(--accent);border-radius:2px;cursor:ew-resize;display:none}
+.tbox.sel .rh,.tbox.editing .rh{display:block}
+.tbox .x{position:absolute;right:-10px;top:-12px;width:20px;height:20px;border:0;border-radius:50%;background:#fff;color:#555;font-size:13px;line-height:20px;padding:0;box-shadow:0 1px 3px rgba(0,0,0,.3);display:none}
+.tbox.sel .x,.tbox.editing .x{display:block}
+
+/* スマホ・タブレット */
+@media (max-width:900px){
+  .main{grid-template-columns:minmax(0,1fr);padding:10px;gap:12px}
+  .thumbs{order:0}
+  .sheet-wrap{order:1;padding:10px}
+  .tray{order:2}
+}
+@media (max-width:700px){
+  .bar{padding:8px 10px;gap:8px}
+  .brand{font-size:16px}
+  .rec-state{font-size:12px;white-space:normal}
+  .interval{font-size:12px}
+  .spacer{display:none}
+  .bar-btn,.export{padding:6px 10px;font-size:12px}
+  .tools .hint{display:none}
+  .sheet-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px 6px}
+  .sheet-scroll .sheet{min-width:640px}
+  .banner{margin:8px 10px 0}
+}
+.card .place{display:none;margin-top:6px;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:700;border-radius:6px;padding:5px 12px;font-size:13px}
+@media (pointer:coarse){
+  .list .card .place{display:inline-block}
+  .card .x{opacity:1}
+  .tbox .rh{width:16px;height:16px;margin-top:-8px;right:-9px}
+}
+
 /* usage log */
 .log{border-top:1px solid var(--line);padding:10px 14px 12px;background:var(--panel-2);border-radius:0 0 10px 10px}
 .log h3{margin:0 0 6px;font-size:12px;color:var(--ink-2);font-weight:500;letter-spacing:.04em}
@@ -211,18 +284,26 @@ button:disabled{cursor:not-allowed;opacity:.55}
     </select>
   </label>
   <span class="spacer"></span>
-  <button class="bar-btn" id="newBtn" type="button">新しいシート</button>
+  <button class="bar-btn" id="newBtn" type="button" title="今のシートを閉じて、別の班として最初からはじめる">別の班ではじめる</button>
   <button class="export" id="exportBtn" type="button">PowerPointで書き出す</button>
 </header>
 
 <div class="banner" id="banner" hidden><span id="bannerMsg"></span><button type="button" id="bannerClose" aria-label="閉じる">×</button></div>
 
 <main class="main">
+  <nav class="thumbs" id="thumbs" aria-label="スライドの一覧"></nav>
   <section class="sheet-wrap" aria-label="課題シート">
-    <div class="sheet-meta">
-      <span>カードは右のトレイからシートにドラッグして置く。ダブルクリックで書き直せる</span>
-      <span>メンバー名をクリック → リーダ（赤）／オブザーバ（青）／メンバ</span>
+    <div class="tools">
+      <button class="tool" id="textBtn" type="button" title="押したあと、シートの文字を置きたい場所をクリック">＋ テキストボックス</button>
+      <label for="textSize">文字の大きさ
+        <select id="textSize">
+          <option value="12">12</option><option value="14">14</option><option value="18" selected>18</option>
+          <option value="24">24</option><option value="32">32</option><option value="44">44</option>
+        </select>
+      </label>
+      <span class="hint" id="toolHint"></span>
     </div>
+    <div class="sheet-scroll">
     <div class="sheet" id="sheet">
       <div class="s-head">
         <div class="s-title">課題 <input id="kadaiNo" value="1-1" aria-label="課題番号"></div>
@@ -235,9 +316,10 @@ button:disabled{cursor:not-allowed;opacity:.55}
       </div>
       <div class="s-rule"></div>
       <div class="s-body" id="body">
-        <div class="s-hint" id="bodyHint">ここはみんなで自由に使うスペース<br>話し合いから出たカードを置いて、書き出したあとPowerPointで線や囲みを足していける</div>
+        <div class="s-hint" id="bodyHint">ここはみんなで自由に使うスペース<br>右のトレイのカードを置いたり、「＋ テキストボックス」で文字を書いたりできる</div>
       </div>
-      <div class="s-page">1</div>
+      <div class="s-page" id="pageNo">1</div>
+    </div>
     </div>
   </section>
 
@@ -303,7 +385,7 @@ button:disabled{cursor:not-allowed;opacity:.55}
     <div class="script"><small>「録る」を押したら、これを読んでください</small>こんにちは、<span id="scriptName">〇〇</span>です。今日はよろしくお願いします。</div>
     <div class="people" id="voicePeople"></div>
     <label class="consent" id="consentLabel"><input type="checkbox" id="agree"> 声のサンプルを、この授業の話し合いの色分けにだけ使うことに同意します</label>
-    <p class="note">声のサンプルは「新しいシート」を押したとき、または12時間たつと削除されます。登録しない人がいても使えます（その人の発言は灰色で数えます）。名前はシートのメンバ欄に入ります。</p>
+    <p class="note">声のサンプルは「別の班ではじめる」を押したとき、または12時間たつと削除されます。登録しない人がいても使えます（その人の発言は灰色で数えます）。名前はシートのメンバ欄に入ります。</p>
     <div class="actions">
       <button class="primary" id="voiceGo" type="button" disabled>この色ではじめる</button>
       <button class="skip" type="button" id="voiceSkip">登録せずにはじめる</button>
@@ -331,6 +413,8 @@ const STORE_KEY = 'grarec_kadai_current';
 const S = {
   session_id: '', group_number: '', kadai_no: '1-1', task_hint: '', leader_id: '',
   members: [{name:'', role:'leader'}],
+  slides: [{id: 's1'}], cur: 's1',                 // スライド（PowerPointのページ）と、いま開いているスライド
+  texts: [],            // テキストボックス {id, slide, x, y, w(%), size(pt), text}
   cards: [],            // {id, keyword, quote, kind, lone, type, thought, reason, source:'ai'|'manual', place:'tray'|'sheet'|'archived'|'deleted', x, y, mention, addedAt, batch}
   events: [],           // 使われ方ログ {t, ev, id?, kw?, extra?}
   transcript: [],       // {t, text}
@@ -399,6 +483,12 @@ function cardEl(c){
   if (c.reason) el.title = 'AIが選んだ理由：' + c.reason;
   if (c.mention > 1){ const b = document.createElement('span'); b.className = 'cnt'; b.textContent = '×' + c.mention; el.appendChild(b); }
   if (c.place === 'sheet'){ el.style.left = c.x + '%'; el.style.top = c.y + '%'; }
+  if (c.place === 'tray'){
+    const pb = document.createElement('button'); pb.type = 'button'; pb.className = 'place'; pb.textContent = 'シートに置く';
+    pb.addEventListener('pointerdown', e => e.stopPropagation());
+    pb.onclick = e => { e.stopPropagation(); placeByTap(c); };
+    el.appendChild(pb);
+  }
   el.querySelector('.x').onclick = e => { e.stopPropagation(); c.place = 'deleted'; log('delete', c); render(); save(); };
   el.addEventListener('dblclick', () => editCard(c, el));
   el.addEventListener('keydown', e => { if (e.key === 'Enter' && document.activeElement === el) editCard(c, el); });
@@ -420,21 +510,226 @@ function editCard(c, el){
   kw.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); kw.blur(); } });
 }
 function render(){
+  ensureSlides();
   const list = $('list'), body = $('body');
   list.querySelectorAll('.card').forEach(n => n.remove());
   body.querySelectorAll('.card').forEach(n => n.remove());
+  body.querySelectorAll('.tbox').forEach(n => { if (n.dataset.id !== editingText) n.remove(); });
   // トレイは新しいものが上
   S.cards.filter(c => c.place === 'tray').slice().reverse().forEach(c => list.appendChild(cardEl(c)));
-  S.cards.filter(c => c.place === 'sheet').forEach(c => body.appendChild(cardEl(c)));
+  S.cards.filter(c => c.place === 'sheet' && c.slide === S.cur).forEach(c => body.appendChild(cardEl(c)));
+  S.texts.filter(t => t.slide === S.cur && t.id !== editingText).forEach(t => body.appendChild(textEl(t)));
   requestAnimationFrame(() => document.querySelectorAll('.card.new').forEach(n => n.classList.remove('new')));
   let e = list.querySelector('.empty');
   if (!list.querySelector('.card')){
     if (!e){ e = document.createElement('div'); e.className = 'empty'; list.appendChild(e); }
     e.innerHTML = S.cycle ? 'トレイのカードはすべてシートに置きました' : 'まだカードはありません<br>「録音をはじめる」を押すと、話し合いからカードが届きます';
   } else if (e) e.remove();
-  $('bodyHint').hidden = !!body.querySelector('.card');
+  $('pageNo').textContent = slideNo(S.cur);
+  renderThumbs(); paintBodyHint();
   paintStats();
 }
+function paintBodyHint(){ $('bodyHint').hidden = !!$('body').querySelector('.card,.tbox'); }
+
+// ================= スライド（PowerPointのように増やせる） =================
+const PT2CQW = 12700 / 9906000 * 100;   // 書き出すPowerPointで 1pt がシートの幅の何%か
+function ensureSlides(){
+  if (!Array.isArray(S.slides) || !S.slides.length) S.slides = [{id: 's1'}];
+  if (!S.slides.some(x => x.id === S.cur)) S.cur = S.slides[0].id;
+  if (!Array.isArray(S.texts)) S.texts = [];
+  const ok = id => S.slides.some(x => x.id === id);
+  S.cards.forEach(c => { if (c.place === 'sheet' && !ok(c.slide)) c.slide = S.slides[0].id; });
+  S.texts.forEach(t => { if (!ok(t.slide)) t.slide = S.slides[0].id; });
+}
+const slideNo = id => S.slides.findIndex(x => x.id === id) + 1;
+const onSlide = id => ({cards: S.cards.filter(c => c.place === 'sheet' && c.slide === id), texts: S.texts.filter(t => t.slide === id)});
+function renderThumbs(){
+  const box = $('thumbs'); box.innerHTML = '';
+  S.slides.forEach((sl, i) => {
+    const th = document.createElement('div');
+    th.className = 'thumb' + (sl.id === S.cur ? ' on' : ''); th.dataset.slide = sl.id;
+    th.tabIndex = 0; th.setAttribute('role', 'button'); th.setAttribute('aria-label', `スライド ${i + 1}`);
+    th.innerHTML = `<span class="no">${i + 1}</span><div class="sheet mini"><div class="m-head"></div><div class="s-rule"></div><div class="s-body"></div></div>`;
+    const mb = th.querySelector('.s-body');
+    const o = onSlide(sl.id);
+    o.cards.forEach(c => {
+      const e = document.createElement('div'); e.className = 'card'; e.dataset.kind = c.kind;
+      e.style.left = c.x + '%'; e.style.top = c.y + '%';
+      e.innerHTML = '<span class="kind"></span><div class="kw"></div>';
+      e.querySelector('.kind').textContent = KIND_LABEL[c.kind] || ''; e.querySelector('.kw').textContent = c.keyword;
+      mb.appendChild(e);
+    });
+    o.texts.forEach(t => {
+      const e = document.createElement('div'); e.className = 'tbox'; placeText(e, t);
+      const tx = document.createElement('div'); tx.className = 'tx'; tx.textContent = t.text; e.appendChild(tx);
+      mb.appendChild(e);
+    });
+    if (S.slides.length > 1){
+      const d = document.createElement('button'); d.type = 'button'; d.className = 'del'; d.textContent = '×';
+      d.setAttribute('aria-label', `スライド ${i + 1} を削除`);
+      // pointerdown で動かす（クリックの途中で一覧が作り直されても取りこぼさないように）
+      d.onpointerdown = e => { if (e.button !== 0) return; e.preventDefault(); e.stopPropagation(); deleteSlide(sl.id, d); };
+      d.onclick = e => { e.stopPropagation(); if (e.detail === 0) deleteSlide(sl.id, d); };   // キーボード
+      th.appendChild(d);
+    }
+    th.onpointerdown = e => { if (e.button !== 0 || e.target.closest('.del')) return; e.preventDefault(); goSlide(sl.id); };
+    th.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); goSlide(sl.id); } };
+    box.appendChild(th);
+  });
+  const add = document.createElement('button'); add.type = 'button'; add.className = 'add-slide'; add.textContent = '＋ スライドを追加';
+  add.onpointerdown = e => { if (e.button !== 0) return; e.preventDefault(); addSlide(); };
+  add.onclick = e => { if (e.detail === 0) addSlide(); };   // キーボード
+  box.appendChild(add);
+}
+function goSlide(id){
+  if (id === S.cur) return;
+  finishTextEdit(); S.cur = id; selText = null;
+  log('slide_switch', null, {slide: slideNo(id)}); render(); save();
+}
+function addSlide(){
+  finishTextEdit();
+  const sl = {id: 's' + Date.now().toString(36)};
+  S.slides.splice(slideNo(S.cur), 0, sl);          // 今のスライドのすぐ後ろに入れる（PowerPointと同じ）
+  S.cur = sl.id; selText = null;
+  log('slide_add', null, {slide: slideNo(sl.id), total: S.slides.length}); render(); save();
+  toast(`スライド ${slideNo(sl.id)} を追加しました`);
+}
+function deleteSlide(id, btn){
+  const o = onSlide(id);
+  if ((o.cards.length || o.texts.length) && !btn.classList.contains('confirm')){
+    btn.classList.add('confirm'); btn.textContent = 'もう一度押すと削除';
+    setTimeout(() => { btn.classList.remove('confirm'); btn.textContent = '×'; }, 3000);
+    return;
+  }
+  finishTextEdit();
+  const no = slideNo(id);
+  o.cards.forEach(c => { c.place = 'deleted'; log('delete', c, {via: 'slide_delete'}); });
+  S.texts = S.texts.filter(t => t.slide !== id);
+  S.slides = S.slides.filter(x => x.id !== id);
+  if (S.cur === id) S.cur = S.slides[Math.min(no - 1, S.slides.length - 1)].id;
+  log('slide_delete', null, {slide: no, cards: o.cards.length, texts: o.texts.length, total: S.slides.length});
+  render(); save();
+}
+
+// ================= テキストボックス（PowerPointと同じ：置きたい所をクリックして文字を打つ） =================
+let textMode = false, selText = null, editingText = null;
+const DEFAULT_HINT = 'カードは右のトレイからドラッグ（左のスライドに落とすとそのスライドへ）。ダブルクリックで書き直せる';
+function placeText(el, t){
+  el.style.left = t.x + '%'; el.style.top = t.y + '%'; el.style.width = t.w + '%';
+  el.style.fontSize = (t.size * PT2CQW).toFixed(3) + 'cqw';
+}
+function setTextMode(on){
+  textMode = on; $('textBtn').classList.toggle('on', on); $('body').classList.toggle('texting', on);
+  $('toolHint').textContent = on ? 'シートの文字を置きたい場所をクリック（Escでやめる）' : DEFAULT_HINT;
+}
+function finishTextEdit(){ if (editingText && document.activeElement && document.activeElement.blur) document.activeElement.blur(); }
+function removeText(t, silent){
+  S.texts = S.texts.filter(x => x.id !== t.id);
+  if (!silent) log('text_delete', null, {tid: t.id, slide: slideNo(t.slide)});
+  if (selText === t.id) selText = null;
+  if (editingText === t.id) editingText = null;
+  render(); save();
+}
+function selectText(t, el){
+  selText = t.id; $('textSize').value = String(t.size);
+  document.querySelectorAll('#body .tbox.sel').forEach(n => { if (n !== el) n.classList.remove('sel'); });
+  if (el) el.classList.add('sel');
+}
+function textEl(t){
+  const el = document.createElement('div');
+  el.className = 'tbox' + (t.id === selText ? ' sel' : ''); el.dataset.id = t.id;
+  placeText(el, t);
+  el.innerHTML = '<div class="tx"></div><span class="rh" title="幅を変える"></span><button class="x" type="button" aria-label="テキストボックスを消す">×</button>';
+  const tx = el.querySelector('.tx'); tx.textContent = t.text;
+  const xb = el.querySelector('.x');
+  xb.addEventListener('pointerdown', e => e.stopPropagation());
+  xb.onclick = e => { e.stopPropagation(); removeText(t); };
+  tx.addEventListener('input', () => { t.text = tx.innerText.replace(/\u00a0/g, ' '); });
+  tx.addEventListener('paste', e => {      // 書式を持ち込まない（文字だけ貼る）
+    e.preventDefault();
+    document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text/plain'));
+  });
+  el.addEventListener('pointerdown', ev => {
+    if (ev.button !== 0 || editingText === t.id || ev.target.closest('.x')) return;
+    const resizing = !!ev.target.closest('.rh');
+    ev.preventDefault(); ev.stopPropagation();
+    selectText(t, el);
+    const b = $('body').getBoundingClientRect(), sx = ev.clientX, sy = ev.clientY, x0 = t.x, y0 = t.y, w0 = t.w;
+    let moved = false;
+    const move = e => {
+      if (!moved && Math.hypot(e.clientX - sx, e.clientY - sy) < 4) return;
+      moved = true;
+      const dx = (e.clientX - sx) / b.width * 100, dy = (e.clientY - sy) / b.height * 100;
+      if (resizing) t.w = +Math.max(5, Math.min(w0 + dx, 100 - t.x)).toFixed(2);
+      else { t.x = +Math.max(0, Math.min(x0 + dx, 100 - t.w)).toFixed(2); t.y = +Math.max(0, Math.min(y0 + dy, 95)).toFixed(2); }
+      placeText(el, t);
+    };
+    const up = () => {
+      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up);
+      if (moved){ log(resizing ? 'text_resize' : 'text_move', null, {tid: t.id, slide: slideNo(t.slide)}); renderThumbs(); save(); }
+      else if (!resizing) startTextEdit(t, el);
+    };
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
+  });
+  return el;
+}
+function startTextEdit(t, el){
+  el = el || document.querySelector(`#body .tbox[data-id="${t.id}"]`); if (!el) return;
+  const tx = el.querySelector('.tx');
+  selectText(t, el);
+  editingText = t.id; el.classList.add('editing');
+  tx.contentEditable = 'plaintext-only';
+  if (tx.contentEditable !== 'plaintext-only') tx.contentEditable = 'true';
+  tx.focus();
+  const range = document.createRange(); range.selectNodeContents(tx); range.collapse(false);
+  const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  const before = t.created ? '' : t.text;
+  delete t.created;
+  const key = e => { if (e.key === 'Escape'){ e.preventDefault(); tx.blur(); } };
+  tx.addEventListener('keydown', key);
+  tx.addEventListener('blur', () => {
+    tx.removeEventListener('keydown', key);
+    tx.contentEditable = 'false'; el.classList.remove('editing');
+    if (editingText === t.id) editingText = null;
+    const v = tx.innerText.replace(/\u00a0/g, ' ').replace(/\n$/, '');
+    if (!v.trim()){ removeText(t, !before); return; }
+    t.text = v;
+    if (v !== before) log(before ? 'text_edit' : 'text_add', null, {tid: t.id, slide: slideNo(t.slide), chars: v.length});
+    renderThumbs(); paintBodyHint(); save();
+  }, {once: true});
+}
+$('textBtn').onclick = () => { finishTextEdit(); setTextMode(!textMode); };
+$('textSize').onchange = () => {
+  const t = S.texts.find(x => x.id === selText); if (!t) return;
+  t.size = +$('textSize').value;
+  const el = document.querySelector(`#body .tbox[data-id="${t.id}"]`); if (el) placeText(el, t);
+  log('text_size', null, {tid: t.id, size: t.size}); renderThumbs(); save();
+};
+$('body').addEventListener('pointerdown', e => {
+  if (e.target.closest('.card,.tbox')) return;
+  if (!textMode){
+    if (selText){ selText = null; document.querySelectorAll('#body .tbox.sel').forEach(n => n.classList.remove('sel')); }
+    return;
+  }
+  e.preventDefault();
+  const b = $('body').getBoundingClientRect();
+  const x = Math.max(0, Math.min((e.clientX - b.left) / b.width * 100, 92));
+  const y = Math.max(0, Math.min((e.clientY - b.top) / b.height * 100, 92));
+  const t = {id: 't' + Date.now().toString(36), slide: S.cur, x: +x.toFixed(2), y: +y.toFixed(2),
+             w: +Math.min(35, 100 - x).toFixed(2), size: +$('textSize').value, text: '', created: true, createdAt: nowISO()};
+  S.texts.push(t); setTextMode(false);
+  const el = textEl(t); $('body').appendChild(el); paintBodyHint();
+  startTextEdit(t, el);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && textMode) setTextMode(false);
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selText && !editingText &&
+      !(e.target.closest && e.target.closest('input,textarea,select,[contenteditable="true"],[contenteditable="plaintext-only"]'))){
+    const t = S.texts.find(x => x.id === selText);
+    if (t){ e.preventDefault(); removeText(t); }
+  }
+});
+setTextMode(false);
 
 // 新しいカードが届いたとき
 function deliver(newCards){
@@ -464,6 +759,21 @@ $('manualForm').onsubmit = e => {
   $('manualInput').value = ''; render(); save();
 };
 
+// 指で操作する端末用：今のスライドの空いている所に置く
+function placeByTap(c){
+  const taken = S.cards.filter(x => x.place === 'sheet' && x.slide === S.cur);
+  const xs = [2, 22, 42, 62, 81], ys = [3, 19, 35, 51, 67, 83];
+  let spot = null;
+  for (const y of ys){ for (const x of xs){
+    if (!taken.some(t => Math.abs(t.x - x) < 17 && Math.abs(t.y - y) < 12)){ spot = {x, y}; break; }
+  } if (spot) break; }
+  if (!spot) spot = {x: 2 + (taken.length % 5) * 2, y: 3 + (taken.length % 5) * 2};
+  c.x = spot.x; c.y = spot.y; c.place = 'sheet'; c.slide = S.cur;
+  log('place', c, {slide: slideNo(S.cur), via: 'tap', secToPlace: Math.round((Date.now() - Date.parse(c.addedAt)) / 1000)});
+  render(); save();
+  toast(`スライド ${slideNo(S.cur)} に置きました（ドラッグで動かせます）`);
+}
+
 // ドラッグ（マウス・タッチ・ペン共通）
 function enableDrag(el, c){
   el.addEventListener('pointerdown', ev => {
@@ -483,19 +793,37 @@ function enableDrag(el, c){
       }
       ghost.style.left = (e.clientX - offX) + 'px'; ghost.style.top = (e.clientY - offY) + 'px';
       body.classList.toggle('drop', inBody(e.clientX, e.clientY));
+      const over = document.elementFromPoint(e.clientX, e.clientY);
+      const th = over && over.closest ? over.closest('.thumb') : null;
+      document.querySelectorAll('.thumb.drop').forEach(n => { if (n !== th) n.classList.remove('drop'); });
+      if (th) th.classList.add('drop');
     };
     const up = e => {
       document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up);
       if (!ghost) return;
       ghost.remove(); el.style.opacity = ''; body.classList.remove('drop');
+      document.querySelectorAll('.thumb.drop').forEach(n => n.classList.remove('drop'));
+      const over = document.elementFromPoint(e.clientX, e.clientY);
+      const th = over && over.closest ? over.closest('.thumb') : null;
+      if (th && th.dataset.slide){                       // 左の一覧のスライドに落とした
+        const fromTray0 = c.place === 'tray';
+        if (fromTray0 || th.dataset.slide !== c.slide){
+          if (fromTray0){ c.x = 4; c.y = 4; }
+          c.place = 'sheet'; c.slide = th.dataset.slide;
+          log(fromTray0 ? 'place' : 'move', c, Object.assign({slide: slideNo(c.slide), via: 'thumb'},
+            fromTray0 ? {secToPlace: Math.round((Date.now() - Date.parse(c.addedAt)) / 1000)} : {}));
+          render(); save(); toast(`スライド ${slideNo(c.slide)} に移しました`);
+        }
+        return;
+      }
       if (!inBody(e.clientX, e.clientY)) return;
       const b = body.getBoundingClientRect();
       const cardPct = $('sheet').getBoundingClientRect().width * 0.18 / b.width * 100;
       const x = Math.max(0, Math.min((e.clientX - offX - b.left) / b.width * 100, 100 - cardPct));
       const y = Math.max(0, Math.min((e.clientY - offY - b.top) / b.height * 100, 88));
       const fromTray = c.place === 'tray';
-      c.x = +x.toFixed(2); c.y = +y.toFixed(2); c.place = 'sheet';
-      log(fromTray ? 'place' : 'move', c, fromTray ? {secToPlace: Math.round((Date.now() - Date.parse(c.addedAt)) / 1000)} : undefined);
+      c.x = +x.toFixed(2); c.y = +y.toFixed(2); c.place = 'sheet'; c.slide = S.cur;
+      log(fromTray ? 'place' : 'move', c, Object.assign({slide: slideNo(S.cur)}, fromTray ? {secToPlace: Math.round((Date.now() - Date.parse(c.addedAt)) / 1000)} : {}));
       render(); save();
     };
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
@@ -527,6 +855,7 @@ let pendingTranscribes = 0;
 function intervalMin(){ if (QUICK) return 1; const p = S.plan; return p === '3-10' ? (S.cycle === 0 ? 3 : 10) : +p; }
 function scheduleNextCard(){ nextCardAt = Date.now() + intervalMin() * 60 * 1000; }
 
+const extOf = type => /mp4|m4a|aac/.test(type || '') ? 'mp4' : /ogg/.test(type || '') ? 'ogg' : /wav/.test(type || '') ? 'wav' : 'webm';
 function newRecorder(){
   const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
   const r = new MediaRecorder(stream, mime ? {mimeType: mime} : undefined);
@@ -550,7 +879,7 @@ function rotate(){
 }
 async function transcribe(blob, segStart, segEnd){
   const fd = new FormData();
-  fd.append('audio', blob, 'segment.webm');
+  fd.append('audio', blob, 'segment.' + extOf(blob.type));
   fd.append('session_id', S.session_id);
   fd.append('hint', 'generic');
   const url = S.voice.enabled ? '/api/transcribe_diarize' : '/api/transcribe_with_speakers';
@@ -626,7 +955,12 @@ async function startRecording(){
   tickTimer = setInterval(() => { if (recording && !extracting && Date.now() >= nextCardAt) makeCards('auto'); paintRec(); }, 1000);
   tlTimer = setInterval(captureTimelapse, TIMELAPSE_MS);
   captureTimelapse();
-  log('rec_start'); meterLoop(); paintRec(); save();
+  log('rec_start', null, {ua_mobile: /iPhone|iPad|Android/.test(navigator.userAgent)}); meterLoop(); paintRec(); save();
+  keepAwake(true);
+  if (/iPhone|iPad|Android/.test(navigator.userAgent) && !warnedMobile){
+    warnedMobile = true;
+    banner('スマホ・タブレットで録音するときは、画面を消したり別のアプリに切り替えたりしないでください（録音が止まることがあります）');
+  }
 }
 function stopRecording(){
   recording = false;
@@ -637,7 +971,19 @@ function stopRecording(){
   if (audioCtx){ try { audioCtx.close(); } catch (_) {} audioCtx = null; analyser = null; }
   $('level').style.width = '0';
   log('rec_stop'); paintRec(); save();
+  keepAwake(false);
 }
+let wakeLock = null, warnedMobile = false;
+async function keepAwake(on){
+  try {
+    if (on && 'wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); }
+    else if (!on && wakeLock){ await wakeLock.release(); wakeLock = null; }
+  } catch (_) {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && recording) keepAwake(true);    // 画面に戻ったら取り直す
+  if (recording) log(document.visibilityState === 'visible' ? 'page_visible' : 'page_hidden');
+});
 $('recBtn').onclick = () => recording ? stopRecording() : startRecording();
 $('nowBtn').onclick = () => { log('now'); if (recording) makeCards('now'); else if (S.pendingText.trim()) makeCardsStopped(); else toast('録音をはじめると、いまの話をカードにできます'); };
 async function makeCardsStopped(){
@@ -689,7 +1035,7 @@ function snapshot(){
     notes: S.cards.filter(c => c.place !== 'deleted').map(c => ({keyword: c.keyword, quote: c.quote, x: c.x, y: c.y,
       area: c.place === 'sheet' ? 'sheet' : 'unplaced', phase: 'kadai', source: c.source, type: c.type, thought: c.thought,
       kind: c.kind, importance: (c.kind === 'question' || c.kind === 'difference') ? 'high' : 'medium',
-      addedAt: c.addedAt, mentionCount: String(c.mention || 1), archived: c.place === 'archived' ? 'true' : ''})),
+      addedAt: c.addedAt, slide: c.place === 'sheet' ? slideNo(c.slide) : null, mentionCount: String(c.mention || 1), archived: c.place === 'archived' ? 'true' : ''})),
     savedAt: nowISO()
   };
 }
@@ -705,7 +1051,8 @@ function save(){
   }, 2000);
 }
 function restore(d){
-  const keys = ['session_id','group_number','kadai_no','task_hint','leader_id','members','cards','events','transcript','plan','cycle','lastExtracted','pendingText','created_at','voice','speech','balTrace','recStartedAt'];
+  const keys = ['session_id','group_number','kadai_no','task_hint','leader_id','members','cards','events','transcript','plan','cycle','lastExtracted','pendingText','created_at','voice','speech','balTrace','recStartedAt','slides','cur','texts'];
+  S.slides = [{id: 's1'}]; S.cur = 's1'; S.texts = [];
   keys.forEach(k => { if (d[k] !== undefined) S[k] = d[k]; });
   uid = S.cards.length;
   applyHeader(); render(); paintBalance();
@@ -726,7 +1073,9 @@ $('startForm').onsubmit = e => {
   Object.assign(S, {group_number: g, kadai_no: k, task_hint: $('startHint').value.trim(), created_at: nowISO(),
     session_id: `kadai_${g}班_${k}_${stamp()}`, cards: [], events: [], transcript: [], cycle: 0, lastExtracted: '', pendingText: '',
     members: [{name: '', role: 'leader'}], leader_id: '', plan: $('intervalSel').value,
-    voice: {enabled: false, slots: {}}, speech: [], balTrace: [], recStartedAt: 0});
+    voice: {enabled: false, slots: {}}, speech: [], balTrace: [], recStartedAt: 0,
+    slides: [{id: 's1'}], cur: 's1', texts: []});
+  selText = null; editingText = null;
   lastBalState = ''; nudgeShown = false; offSince = null; nudgeSnoozeUntil = 0;
   log('session_start', null, {config: {quick: QUICK, segment_ms: SEGMENT_MS, max_cards: MAX_CARDS, plan: S.plan,
     bal_window_ms: BAL_WINDOW, bal_threshold: BAL_THRESHOLD, quiet_share: QUIET_SHARE, bal_min_speech: BAL_MIN_SPEECH,
@@ -805,7 +1154,7 @@ async function recordVoice(v){
   r.onstop = async () => {
     st.getTracks().forEach(t => t.stop());
     const fd = new FormData();
-    fd.append('audio', new Blob(chunks, {type: r.mimeType || 'audio/webm'}), 'voice.webm');
+    fd.append('audio', new Blob(chunks, {type: r.mimeType || 'audio/webm'}), 'voice.' + extOf(r.mimeType));
     fd.append('session_id', S.session_id); fd.append('slot', v);
     try {
       const res = await fetch('/api/register_voice', {method: 'POST', body: fd});
@@ -899,11 +1248,15 @@ setInterval(() => { if (S.voice.enabled) paintBalance(); }, 15000);
 
 // ================= PowerPoint 書き出し =================
 $('exportBtn').onclick = async () => {
+  finishTextEdit(); ensureSlides();
   const btn = $('exportBtn'); btn.disabled = true; btn.textContent = '書き出し中…';
   try {
     const res = await fetch('/api/export_kadai_pptx', {method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({kadai_no: S.kadai_no, leader_id: S.leader_id, group_number: S.group_number,
-        members: S.members.filter(m => m.name), cards: S.cards.filter(c => c.place === 'sheet').map(c => ({keyword: c.keyword, x: c.x, y: c.y}))})});
+        members: S.members.filter(m => m.name),
+        slides: S.slides.map(sl => { const o = onSlide(sl.id); return {
+          cards: o.cards.map(c => ({keyword: c.keyword, x: c.x, y: c.y})),
+          texts: o.texts.map(t => ({text: t.text, x: t.x, y: t.y, w: t.w, size: t.size}))}; })})});
     if (!res.ok){ let msg = ''; try { msg = (await res.json()).error; } catch (_) {} throw new Error(msg || res.status); }
     const blob = await res.blob();
     const a = document.createElement('a');
@@ -912,7 +1265,7 @@ $('exportBtn').onclick = async () => {
     a.download = `kadai${S.kadai_no}${S.group_number ? '_group' + S.group_number : ''}.pptx`.replace(/[^\w.\-]/g, '_');
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    log('export', null, {cards: S.cards.filter(c => c.place === 'sheet').length}); save();
+    log('export', null, {cards: S.cards.filter(c => c.place === 'sheet').length, slides: S.slides.length, texts: S.texts.length}); save();
     toast('PowerPointを書き出しました');
   } catch (e) {
     banner('書き出しに失敗しました：' + e.message);
@@ -922,7 +1275,7 @@ $('exportBtn').onclick = async () => {
 window.addEventListener('beforeunload', e => { if (recording){ e.preventDefault(); e.returnValue = ''; } });
 
 // テスト・デバッグ用に最小限だけ公開
-window.GraRecKadai = {S, deliver, makeCards, rotate, render, paintBalance, balanceNow, openVoice};
+window.GraRecKadai = {S, deliver, makeCards, rotate, render, paintBalance, balanceNow, openVoice, addSlide, goSlide};
 
 renderMembers(); render(); paintRec();
 if (QUICK) banner('テストモード：30秒ごとに文字起こし、1分ごとにカード、バランスの判定は1分後から（本番では ?quick を外す）');
