@@ -222,6 +222,10 @@ button:disabled{cursor:not-allowed;opacity:.55}
 .s-th.wide{grid-column:span 1}
 .s-td input.theme{text-align:left;font-weight:700}
 
+/* 保存の状態 */
+.save-state{font-size:12px;border-radius:999px;padding:4px 10px;background:#FEF3C7;color:#92400E;font-weight:700;white-space:nowrap}
+.save-state.ok{background:#DCFCE7;color:#166534}
+
 /* usage log */
 .log{border-top:1px solid var(--line);padding:10px 14px 12px;background:var(--panel-2);border-radius:0 0 10px 10px}
 .log h3{margin:0 0 6px;font-size:12px;color:var(--ink-2);font-weight:500;letter-spacing:.04em}
@@ -308,6 +312,7 @@ button:disabled{cursor:not-allowed;opacity:.55}
   </label>
   <span class="spacer"></span>
   <button class="bar-btn" id="newBtn" type="button" title="今のシートを閉じて、別の班として最初からはじめる">別の班ではじめる</button>
+  <span class="save-state" id="saveState" role="status" aria-live="polite" hidden></span>
   <button class="export" id="exportBtn" type="button">PowerPointで書き出す</button>
 </header>
 
@@ -1163,17 +1168,51 @@ function snapshot(){
     savedAt: nowISO()
   };
 }
+// サーバーへの保存：失敗したら間隔をあけて自動でやり直す。2回続けて失敗したら画面に出す
+let saveFails = 0, saveRetryTimer = null, saveOkTimer = null, saving = false, savePending = false;
 function save(){
   if (!S.session_id) return;
   try { localStorage.setItem(STORE_KEY, JSON.stringify(snapshot())); } catch (_) {}
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    try {
-      const res = await fetch('/api/save_session', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(snapshot())});
-      if (!res.ok) throw new Error(res.status);
-    } catch (e) { console.warn('save', e); }
-  }, 2000);
+  saveTimer = setTimeout(pushSave, 2000);
 }
+async function pushSave(){
+  saveTimer = null; clearTimeout(saveRetryTimer); saveRetryTimer = null;
+  if (!S.session_id) return;
+  if (saving){ savePending = true; return; }          // 送っている途中なら、終わってからもう一度
+  saving = true;
+  try {
+    const res = await fetch('/api/save_session', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(snapshot())});
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json().catch(() => ({}));
+    if (d && d.ok === false) throw new Error(d.error || 'save failed');
+    if (saveFails){ log('save_recovered', null, {fails: saveFails}); saveFails = 0; paintSaveState(true); savePending = true; }
+  } catch (e) {
+    console.warn('save', e);
+    saveFails++;
+    if (saveFails === 1) log('save_fail', null, {error: String(e && e.message || e).slice(0, 80)});
+    paintSaveState(false);
+    saveRetryTimer = setTimeout(pushSave, Math.min(30000, 3000 * 2 ** (saveFails - 1)));
+  } finally {
+    saving = false;
+    if (savePending && !saveRetryTimer){ savePending = false; clearTimeout(saveTimer); saveTimer = setTimeout(pushSave, 300); }
+  }
+}
+function paintSaveState(recovered){
+  const el = $('saveState'); if (!el) return;
+  clearTimeout(saveOkTimer);
+  if (saveFails >= 2){ el.className = 'save-state'; el.textContent = '保存できていません（自動でやり直しています）'; el.hidden = false; }
+  else if (recovered && !el.hidden){ el.className = 'save-state ok'; el.textContent = '保存できました'; saveOkTimer = setTimeout(() => { el.hidden = true; }, 3000); }
+  else if (!saveFails) el.hidden = true;
+}
+// 保存待ちのまま閉じるときは、閉じる直前に送る（64KBまで。それより大きいときはブラウザ内の控えが残る）
+window.addEventListener('pagehide', () => {
+  if (!S.session_id || (!saveTimer && !saveRetryTimer)) return;
+  try {
+    const body = JSON.stringify(snapshot());
+    if (body.length < 60000 && navigator.sendBeacon) navigator.sendBeacon('/api/save_session', new Blob([body], {type: 'application/json'}));
+  } catch (_) {}
+});
 function restore(d){
   const keys = ['session_id','group_number','kadai_no','task_hint','leader_id','members','cards','events','transcript','plan','cycle','lastExtracted','pendingText','created_at','voice','speech','balTrace','recStartedAt','slides','cur','texts'];
   S.slides = [{id: 's1'}]; S.cur = 's1'; S.texts = [];
@@ -1414,7 +1453,7 @@ $('exportBtn').onclick = async () => {
   } finally { btn.disabled = false; btn.textContent = 'PowerPointで書き出す'; }
 };
 
-window.addEventListener('beforeunload', e => { if (recording){ e.preventDefault(); e.returnValue = ''; } });
+window.addEventListener('beforeunload', e => { if (recording || saveFails){ e.preventDefault(); e.returnValue = ''; } });
 
 // テスト・デバッグ用に最小限だけ公開
 window.GraRecKadai = {S, deliver, makeCards, rotate, render, paintBalance, balanceNow, openVoice, addSlide, goSlide};

@@ -7,6 +7,7 @@ import base64
 import re
 import math
 import zipfile
+import threading
 import subprocess
 import traceback
 from datetime import datetime
@@ -1283,8 +1284,13 @@ def save_session():
     filepath = os.path.join(SESSIONS_DIR, f"{session_id}.json")
     try:
         os.makedirs(SESSIONS_DIR, exist_ok=True)
-        with open(filepath, "w", encoding="utf-8") as f:
+        # 別のファイルに書き終わってから入れ替える（途中でサーバーが止まっても、前のファイルが壊れない）
+        tmp_path = f"{filepath}.{os.getpid()}.{threading.get_ident()}.tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, filepath)
         print(f"セッション保存OK: {filepath}")
         return jsonify({"ok": True, "session_id": session_id})
     except Exception as e:
