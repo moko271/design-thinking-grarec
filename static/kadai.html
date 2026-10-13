@@ -199,6 +199,19 @@ button:disabled{cursor:not-allowed;opacity:.55}
   .tbox .rh{width:16px;height:16px;margin-top:-8px;right:-9px}
 }
 
+/* これまでのカード */
+.ttabs{display:flex;gap:4px;margin-top:10px;background:var(--panel-2);border-radius:8px;padding:3px}
+.ttab{flex:1;border:0;background:transparent;border-radius:6px;padding:6px 4px;font-size:12.5px;color:var(--ink-2)}
+.ttab.on{background:#fff;color:var(--ink);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.ttab b{display:inline-block;min-width:18px;border-radius:999px;background:var(--line);color:var(--ink);font-size:11px;padding:0 5px;margin-left:4px;font-weight:700}
+.hbatch{font-size:12px;color:var(--ink-2);font-weight:700;display:flex;align-items:center;gap:8px;margin-top:4px}
+.hbatch::after{content:"";flex:1;height:1px;background:var(--line)}
+.list .card.old{background:#FAFAF7;border-style:dashed}
+.list .card.old .x{display:none}
+.list .card.old.fixed{cursor:default}
+.card .hback{display:inline-block;margin-top:6px;border:1px solid var(--accent);background:#fff;color:var(--accent);border-radius:6px;font-size:12px;padding:3px 10px}
+.card .hon{display:block;margin-top:5px;font-size:11.5px;color:var(--ok);font-weight:700}
+
 /* usage log */
 .log{border-top:1px solid var(--line);padding:10px 14px 12px;background:var(--panel-2);border-radius:0 0 10px 10px}
 .log h3{margin:0 0 6px;font-size:12px;color:var(--ink-2);font-weight:500;letter-spacing:.04em}
@@ -326,6 +339,10 @@ button:disabled{cursor:not-allowed;opacity:.55}
   <aside class="tray" aria-label="カードトレイ">
     <div class="tray-h">
       <h2>話し合いから出たカード</h2>
+      <div class="ttabs" role="tablist" aria-label="カードの表示">
+        <button class="ttab on" id="tabNow" type="button" role="tab" aria-selected="true">いま届いたカード <b id="cntNow">0</b></button>
+        <button class="ttab" id="tabHist" type="button" role="tab" aria-selected="false">これまでのカード <b id="cntHist">0</b></button>
+      </div>
       <p>決まった間隔でここに届きます。シートに置かなかったカードは、次のカードが届くときに入れ替わります。</p>
       <button class="now" id="nowBtn" type="button">いまの話をカードにする</button>
       <div class="legend" aria-label="カードの種類">
@@ -472,7 +489,8 @@ function editMember(i, btn){
 }
 
 // ================= カード =================
-function cardEl(c){
+function cardEl(c, opt){
+  opt = opt || {};
   const el = document.createElement('div');
   el.className = 'card new'; el.dataset.id = c.id; el.dataset.kind = c.kind; el.tabIndex = 0;
   el.innerHTML = '<span class="kind"></span><span class="lone" hidden>ひとことだけ出た</span><div class="kw"></div><div class="q" hidden></div><button class="x" type="button" aria-label="カードを消す">×</button>';
@@ -492,6 +510,20 @@ function cardEl(c){
   el.querySelector('.x').onclick = e => { e.stopPropagation(); c.place = 'deleted'; log('delete', c); render(); save(); };
   el.addEventListener('dblclick', () => editCard(c, el));
   el.addEventListener('keydown', e => { if (e.key === 'Enter' && document.activeElement === el) editCard(c, el); });
+  if (opt.history){
+    el.classList.add('old');
+    el.querySelectorAll('.place').forEach(n => n.remove());
+    if (c.place === 'sheet'){
+      el.classList.add('fixed');
+      const on = document.createElement('span'); on.className = 'hon'; on.textContent = `✓ シート ${slideNo(c.slide)}枚目にある`;
+      el.appendChild(on);
+      return el;                                     // シートにあるものはここからは動かさない
+    }
+    const bb = document.createElement('button'); bb.type = 'button'; bb.className = 'hback'; bb.textContent = 'トレイに戻す';
+    bb.addEventListener('pointerdown', e => e.stopPropagation());
+    bb.onclick = e => { e.stopPropagation(); c.place = 'tray'; log('history_restore', c); render(); save(); toast('トレイに戻しました'); };
+    el.appendChild(bb);
+  }
   enableDrag(el, c);
   return el;
 }
@@ -512,23 +544,56 @@ function editCard(c, el){
 function render(){
   ensureSlides();
   const list = $('list'), body = $('body');
-  list.querySelectorAll('.card').forEach(n => n.remove());
+  list.querySelectorAll('.card,.hbatch').forEach(n => n.remove());
   body.querySelectorAll('.card').forEach(n => n.remove());
   body.querySelectorAll('.tbox').forEach(n => { if (n.dataset.id !== editingText) n.remove(); });
   // トレイは新しいものが上
-  S.cards.filter(c => c.place === 'tray').slice().reverse().forEach(c => list.appendChild(cardEl(c)));
+  const histCards = S.cards.filter(c => c.source === 'ai' && (c.place === 'archived' || c.place === 'sheet'));
+  $('cntNow').textContent = S.cards.filter(c => c.place === 'tray').length; $('cntHist').textContent = histCards.length;
+  if (trayView === 'history') renderHistory(list, histCards);
+  else S.cards.filter(c => c.place === 'tray').slice().reverse().forEach(c => list.appendChild(cardEl(c)));
   S.cards.filter(c => c.place === 'sheet' && c.slide === S.cur).forEach(c => body.appendChild(cardEl(c)));
   S.texts.filter(t => t.slide === S.cur && t.id !== editingText).forEach(t => body.appendChild(textEl(t)));
   requestAnimationFrame(() => document.querySelectorAll('.card.new').forEach(n => n.classList.remove('new')));
   let e = list.querySelector('.empty');
   if (!list.querySelector('.card')){
     if (!e){ e = document.createElement('div'); e.className = 'empty'; list.appendChild(e); }
-    e.innerHTML = S.cycle ? 'トレイのカードはすべてシートに置きました' : 'まだカードはありません<br>「録音をはじめる」を押すと、話し合いからカードが届きます';
+    e.innerHTML = trayView === 'history' ? 'まだ振り返るカードはありません<br>カードが入れ替わると、ここに残ります'
+      : S.cycle ? 'トレイのカードはすべてシートに置きました' : 'まだカードはありません<br>「録音をはじめる」を押すと、話し合いからカードが届きます';
   } else if (e) e.remove();
   $('pageNo').textContent = slideNo(S.cur);
   renderThumbs(); paintBodyHint();
   paintStats();
 }
+// ================= これまでのカード =================
+let trayView = 'now';
+function renderHistory(list, cards){
+  // 何回目に届いたか（c.batch）ごとに、新しい回から。時刻は、その回のカードを作った記録から
+  const madeAt = S.events.filter(e => e.ev === 'cards').map(e => Date.parse(e.t));
+  const label = k => {
+    const t = madeAt[k - 1];
+    if (t && S.recStartedAt) return `${Math.max(0, Math.round((t - S.recStartedAt) / 60000))}分ごろに届いたカード`;
+    return `${k}回目に届いたカード`;
+  };
+  const groups = {};
+  cards.forEach(c => { const k = c.batch || 0; (groups[k] = groups[k] || []).push(c); });
+  Object.keys(groups).map(Number).sort((a, b) => b - a).forEach(k => {
+    const h = document.createElement('div'); h.className = 'hbatch'; h.textContent = k ? label(k) : 'そのほか';
+    list.appendChild(h);
+    groups[k].forEach(c => list.appendChild(cardEl(c, {history: true})));
+  });
+}
+function setTrayView(v, auto){
+  if (v === trayView) return;
+  trayView = v;
+  $('tabNow').classList.toggle('on', v === 'now'); $('tabNow').setAttribute('aria-selected', String(v === 'now'));
+  $('tabHist').classList.toggle('on', v === 'history'); $('tabHist').setAttribute('aria-selected', String(v === 'history'));
+  log(v === 'history' ? 'history_open' : 'history_close', null, auto ? {auto: true} : undefined);
+  render(); save();
+}
+$('tabNow').onclick = () => setTrayView('now');
+$('tabHist').onclick = () => setTrayView('history');
+
 function paintBodyHint(){ $('bodyHint').hidden = !!$('body').querySelector('.card,.tbox'); }
 
 // ================= スライド（PowerPointのように増やせる） =================
@@ -734,6 +799,7 @@ setTextMode(false);
 // 新しいカードが届いたとき
 function deliver(newCards){
   // 入れ替え：置かれなかったAIカードを下げる（データには残す）
+  if (trayView === 'history') setTrayView('now', true);
   S.cards.filter(c => c.place === 'tray' && c.source === 'ai').forEach(c => { c.place = 'archived'; log('swap', c); });
   let added = 0;
   S.cycle++;
@@ -806,7 +872,7 @@ function enableDrag(el, c){
       const over = document.elementFromPoint(e.clientX, e.clientY);
       const th = over && over.closest ? over.closest('.thumb') : null;
       if (th && th.dataset.slide){                       // 左の一覧のスライドに落とした
-        const fromTray0 = c.place === 'tray';
+        const fromTray0 = c.place === 'tray' || c.place === 'archived';
         if (fromTray0 || th.dataset.slide !== c.slide){
           if (fromTray0){ c.x = 4; c.y = 4; }
           c.place = 'sheet'; c.slide = th.dataset.slide;
@@ -821,9 +887,11 @@ function enableDrag(el, c){
       const cardPct = $('sheet').getBoundingClientRect().width * 0.18 / b.width * 100;
       const x = Math.max(0, Math.min((e.clientX - offX - b.left) / b.width * 100, 100 - cardPct));
       const y = Math.max(0, Math.min((e.clientY - offY - b.top) / b.height * 100, 88));
-      const fromTray = c.place === 'tray';
+      const fromHist = c.place === 'archived';
+      const fromTray = c.place === 'tray' || fromHist;
       c.x = +x.toFixed(2); c.y = +y.toFixed(2); c.place = 'sheet'; c.slide = S.cur;
-      log(fromTray ? 'place' : 'move', c, Object.assign({slide: slideNo(S.cur)}, fromTray ? {secToPlace: Math.round((Date.now() - Date.parse(c.addedAt)) / 1000)} : {}));
+      log(fromTray ? 'place' : 'move', c, Object.assign({slide: slideNo(S.cur)}, fromHist ? {via: 'history'} : {},
+        fromTray ? {secToPlace: Math.round((Date.now() - Date.parse(c.addedAt)) / 1000)} : {}));
       render(); save();
     };
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up);
