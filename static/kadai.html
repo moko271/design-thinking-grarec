@@ -1370,8 +1370,11 @@ $('startForm').onsubmit = e => {
     bal_warmup_ms: BAL_WARMUP, nudge_snooze_ms: NUDGE_SNOOZE, ua: navigator.userAgent.slice(0, 120)}});
   $('startOverlay').hidden = true;
   applyHeader(); render(); paintBalance(); save();
-  openVoice();
+  if (VOICE_AT_START) openVoice();
+  else { SLOTS.forEach(v => S.voice.slots[v] || (S.voice.slots[v] = {name: '', done: false})); finishVoice(false); }
 };
+// 声の登録は、URLに ?voice=on があるときだけ最初に出す（ふだんは出さない）
+const VOICE_AT_START = new URLSearchParams(location.search).get('voice') === 'on';
 let saved = null;
 try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (_) {}
 if (saved && saved.session_id){
