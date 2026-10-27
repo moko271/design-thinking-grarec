@@ -69,11 +69,14 @@ button:disabled{cursor:not-allowed;opacity:.55}
 .sheet{position:relative;width:100%;aspect-ratio:297/210;background:#fff;color:#111;box-shadow:0 1px 3px rgba(0,0,0,.18);font-family:"BIZ UDPGothic","Hiragino Sans",sans-serif;overflow:hidden;container-type:inline-size}
 .s-head{position:absolute;left:2.2%;right:3%;top:2.2%;display:flex;align-items:flex-end}
 .s-title{font-size:3.1cqw;line-height:1;white-space:nowrap;padding-right:.6cqw;padding-bottom:.5cqw}
-.s-title input{width:5.4cqw;border:0;border-bottom:1px dashed #999;font:inherit;background:transparent;color:inherit;padding:0}
+.s-title input{width:5.4cqw;border:0;font:inherit;background:transparent;color:inherit;padding:0;border-radius:2px;outline:1px solid transparent}
+.s-title input:hover,.s-td input:hover{outline:1px solid #9AA6B4}
+.s-title input:focus,.s-td input:focus{outline:1.5px solid var(--accent);background:rgba(255,255,255,.7)}
 .s-table{flex:1;display:grid;grid-template-columns:15% 1fr;font-size:1.75cqw}
 .s-th{background:#000;color:#fff;font-weight:700;text-align:center;padding:.5cqw 0;border-right:1px solid #fff}
 .s-td{background:var(--paper-cell);min-height:3.8cqw;padding:.45cqw .6cqw;display:flex;align-items:center;flex-wrap:wrap;gap:.5cqw;border-right:1px solid #fff}
-.s-td input{width:100%;border:0;background:transparent;font:inherit;color:#111;text-align:center}
+.s-td input{width:100%;border:0;background:transparent;font:inherit;color:#111;text-align:center;border-radius:2px;outline:1px solid transparent}
+.s-td input::placeholder{color:#8a8a8a}
 .chip{border:0;background:#fff;border-radius:3px;padding:.15cqw .7cqw;font:inherit;font-size:1.6cqw;font-weight:700;color:#111}
 .chip.leader{color:var(--leader)}
 .chip.observer{color:var(--observer)}
@@ -226,6 +229,19 @@ button:disabled{cursor:not-allowed;opacity:.55}
 .save-state{font-size:12px;border-radius:999px;padding:4px 10px;background:#FEF3C7;color:#92400E;font-weight:700;white-space:nowrap}
 .save-state.ok{background:#DCFCE7;color:#166534}
 
+/* チームメンバ名（PowerPointの表のセルと同じく、文字をそのまま打つ） */
+.mtext{flex:1;min-width:0;align-self:stretch;display:flex;align-items:center;flex-wrap:wrap;outline:none;font-size:1.6cqw;font-weight:700;color:#111;line-height:1.45;cursor:text;white-space:pre-wrap;border-radius:2px;padding:0 .3cqw}
+.mtext:hover{box-shadow:0 0 0 1px #9AA6B4}
+.mtext:focus{box-shadow:0 0 0 1.5px var(--accent);background:rgba(255,255,255,.7)}
+.mtext:empty::before{content:attr(data-ph);color:#8a8a8a;font-weight:400}
+.mbar{position:fixed;z-index:200;display:flex;gap:4px;background:#1D2733;border-radius:8px;padding:4px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.mbar button{border:0;border-radius:5px;padding:4px 9px;font-size:12px;font-weight:700;background:#fff;color:#111}
+.mbar button.r{color:#FF0000}.mbar button.b{color:#0070C0}
+
+/* AIを出さないモード */
+.ai-badge{background:#FDE68A;color:#78350F;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+body.ai-hidden .ttabs,body.ai-hidden #nowBtn,body.ai-hidden .legend,body.ai-hidden .log,body.ai-hidden .tray-h p{display:none}
+
 /* usage log */
 .log{border-top:1px solid var(--line);padding:10px 14px 12px;background:var(--panel-2);border-radius:0 0 10px 10px}
 .log h3{margin:0 0 6px;font-size:12px;color:var(--ink-2);font-weight:500;letter-spacing:.04em}
@@ -297,6 +313,7 @@ button:disabled{cursor:not-allowed;opacity:.55}
 <header class="bar">
   <span class="brand">GraRec</span>
   <span class="group" id="groupBadge" hidden></span>
+  <span class="ai-badge" id="aiBadge" hidden title="AIのカードは作って記録しますが、画面には出しません">AI非表示（記録のみ）</span>
   <div class="rec" id="rec">
     <button class="rec-btn" id="recBtn" type="button"><span class="dot"></span><span id="recLabel">録音をはじめる</span></button>
     <span class="level" title="マイクの音の大きさ"><i id="level"></i></span>
@@ -311,6 +328,7 @@ button:disabled{cursor:not-allowed;opacity:.55}
     </select>
   </label>
   <span class="spacer"></span>
+  <button class="bar-btn" id="backupBtn" type="button" title="この班の記録と録音を、このPCに保存します（サーバーに残らなかったときの控え）">記録と録音を保存</button>
   <button class="bar-btn" id="newBtn" type="button" title="今のシートを閉じて、別の班として最初からはじめる">別の班ではじめる</button>
   <span class="save-state" id="saveState" role="status" aria-live="polite" hidden></span>
   <button class="export" id="exportBtn" type="button">PowerPointで書き出す</button>
@@ -479,7 +497,7 @@ function areaAt(slideId, x, y){                     // カードの中心が入�
 // ================= 状態 =================
 const S = {
   session_id: '', group_number: '', kadai_no: '1-1', task_hint: '', leader_id: '',
-  members: [{name:'', role:'leader'}],
+  members: [],
   slides: [{id: 's1'}], cur: 's1',                 // スライド（PowerPointのページ）と、いま開いているスライド
   texts: [],            // テキストボックス {id, slide, x, y, w(%), size(pt), text}
   cards: [],            // {id, keyword, quote, kind, lone, type, thought, reason, source:'ai'|'manual', place:'tray'|'sheet'|'archived'|'deleted', x, y, mention, addedAt, batch}
@@ -507,37 +525,83 @@ function similar(a, b){ const x = norm(a), y = norm(b); if (!x || !y) return fal
 // ================= メンバー =================
 const ROLE_NEXT = {'': 'leader', leader: 'observer', observer: ''};
 const ROLE_TEXT = {'': 'メンバ', leader: 'リーダ', observer: 'オブザーバ'};
-function renderMembers(){
-  const box = $('members'); box.innerHTML = '';
-  S.members.forEach((m, i) => {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'chip ' + m.role;
-    b.textContent = m.name || '名前';
-    b.title = ROLE_TEXT[m.role] + '（クリックで役割を切り替え／ダブルクリックで名前を変更）';
-    let clickTimer;
-    b.onclick = () => { clearTimeout(clickTimer); clickTimer = setTimeout(() => { m.role = ROLE_NEXT[m.role]; renderMembers(); save(); }, 220); };
-    b.ondblclick = () => { clearTimeout(clickTimer); editMember(i, b); };
-    box.appendChild(b);
-  });
-  const add = document.createElement('button');
-  add.type = 'button'; add.className = 'chip add'; add.textContent = '＋ メンバー';
-  add.onclick = () => { S.members.push({name:'', role:''}); renderMembers(); editMember(S.members.length - 1, $('members').children[S.members.length - 1]); };
-  box.appendChild(add);
-}
+const ROLE_COLOR = {leader: '#FF0000', observer: '#0070C0'};
+const MEMBER_SEP = /[、，,\s　]/;
 const composing = e => e.isComposing || e.keyCode === 229;   // 日本語の変換中
-function editMember(i, btn){
-  const inp = document.createElement('input');
-  inp.value = S.members[i].name; inp.placeholder = '名前';
-  inp.style.cssText = 'width:9cqw;font:inherit;font-size:1.6cqw;border:1px solid #999;border-radius:3px;padding:0 .3cqw;text-align:left';
-  btn.replaceWith(inp); inp.focus();
-  const done = () => {
-    const v = inp.value.trim();
-    if (v) S.members[i].name = v; else S.members.splice(i, 1);
-    renderMembers(); save();
-  };
-  inp.addEventListener('blur', done, {once: true});
-  inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !composing(e)){ e.preventDefault(); inp.blur(); } });
+function renderMembers(){
+  const box = $('members');
+  let el = $('memberText');
+  if (!el){
+    box.innerHTML = '';
+    el = document.createElement('div'); el.id = 'memberText'; el.className = 'mtext';
+    el.contentEditable = 'true'; el.spellcheck = false;
+    el.dataset.ph = 'クリックして名前を入力（例：田中、三枝、松井）';
+    el.setAttribute('role', 'textbox'); el.setAttribute('aria-label', 'チームメンバ名');
+    box.appendChild(el); bindMemberText(el);
+  }
+  if (document.activeElement === el) return;                    // 打っている途中は書き換えない
+  el.innerHTML = '';
+  S.members.filter(m => m.name).forEach((m, i) => {
+    if (i) el.appendChild(document.createTextNode('、'));
+    const sp = document.createElement('span'); sp.textContent = m.name;
+    if (ROLE_COLOR[m.role]) sp.style.color = ROLE_COLOR[m.role];
+    el.appendChild(sp);
+  });
 }
+function readMembers(el){
+  // 文字ごとの色を見て、区切りで分けた名前ごとに役割を決める（名前の1文字目の色）
+  const roleOf = col => { const c = (col || '').replace(/\s/g, ''); return c === 'rgb(255,0,0)' ? 'leader' : c === 'rgb(0,112,192)' ? 'observer' : ''; };
+  const out = []; let cur = '', role = null;
+  const flush = () => { const n = cur.trim(); if (n) out.push({name: n.slice(0, 20), role: role || ''}); cur = ''; role = null; };
+  const walk = node => node.childNodes.forEach(n => {
+    if (n.nodeType === 3){
+      const col = getComputedStyle(n.parentElement).color;
+      for (const ch of n.textContent){ if (MEMBER_SEP.test(ch)) flush(); else { if (role === null) role = roleOf(col); cur += ch; } }
+    } else if (n.nodeName === 'BR' || n.nodeName === 'DIV') { flush(); if (n.nodeName === 'DIV') walk(n); }
+    else walk(n);
+  });
+  walk(el); flush();
+  return out.slice(0, 12);
+}
+let memberSaveTimer = null;
+function bindMemberText(el){
+  el.addEventListener('input', () => {
+    S.members = readMembers(el);
+    clearTimeout(memberSaveTimer); memberSaveTimer = setTimeout(save, 800);
+  });
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' && !composing(e)){ e.preventDefault(); el.blur(); } });
+  el.addEventListener('paste', e => {
+    e.preventDefault();
+    document.execCommand('insertText', false, (e.clipboardData || window.clipboardData).getData('text/plain').replace(/\s*\n\s*/g, '、'));
+  });
+  el.addEventListener('blur', () => {
+    S.members = readMembers(el);
+    log('members_edit', null, {n: S.members.length, roles: S.members.map(m => m.role || '-').join('')});
+    renderMembers(); save();
+  });
+}
+// 名前を選ぶと出る色の道具（PowerPointの「文字の色」と同じ）
+const mbar = document.createElement('div'); mbar.className = 'mbar'; mbar.id = 'mbar'; mbar.hidden = true;
+mbar.innerHTML = '<button type="button" class="r" data-c="#FF0000">リーダ（赤）</button><button type="button" class="b" data-c="#0070C0">オブザーバ（青）</button><button type="button" data-c="#111111">メンバ（黒）</button>';
+document.body.appendChild(mbar);
+mbar.addEventListener('mousedown', e => e.preventDefault());       // 選んだ文字の選択を外さない
+mbar.addEventListener('pointerdown', e => e.preventDefault());
+mbar.querySelectorAll('button').forEach(b => b.onclick = () => {
+  const el = $('memberText'); if (!el) return;
+  document.execCommand('styleWithCSS', false, true);
+  document.execCommand('foreColor', false, b.dataset.c);
+  S.members = readMembers(el);
+  log('members_role', null, {roles: S.members.map(m => m.role || '-').join('')});
+  save(); mbar.hidden = true;
+});
+document.addEventListener('selectionchange', () => {
+  const el = $('memberText'); const sel = getSelection();
+  if (!el || !sel.rangeCount || sel.isCollapsed || !el.contains(sel.anchorNode) || !el.contains(sel.focusNode)){ mbar.hidden = true; return; }
+  const r = sel.getRangeAt(0).getBoundingClientRect();
+  mbar.hidden = false;
+  mbar.style.left = Math.max(8, Math.min(r.left, innerWidth - mbar.offsetWidth - 8)) + 'px';
+  mbar.style.top = Math.max(8, r.top - mbar.offsetHeight - 8) + 'px';
+});
 
 // ================= カード =================
 function cardEl(c, opt){
@@ -606,14 +670,15 @@ function render(){
   const histCards = S.cards.filter(c => c.source === 'ai' && (c.place === 'archived' || c.place === 'sheet'));
   $('cntNow').textContent = S.cards.filter(c => c.place === 'tray').length; $('cntHist').textContent = histCards.length;
   if (trayView === 'history') renderHistory(list, histCards);
-  else S.cards.filter(c => c.place === 'tray').slice().reverse().forEach(c => list.appendChild(cardEl(c)));
+  else S.cards.filter(c => c.place === 'tray' && !(aiHidden() && c.source === 'ai')).slice().reverse().forEach(c => list.appendChild(cardEl(c)));
   S.cards.filter(c => c.place === 'sheet' && c.slide === S.cur).forEach(c => body.appendChild(cardEl(c)));
   S.texts.filter(t => t.slide === S.cur && t.id !== editingText).forEach(t => body.appendChild(textEl(t)));
   requestAnimationFrame(() => document.querySelectorAll('.card.new').forEach(n => n.classList.remove('new')));
   let e = list.querySelector('.empty');
   if (!list.querySelector('.card')){
     if (!e){ e = document.createElement('div'); e.className = 'empty'; list.appendChild(e); }
-    e.innerHTML = trayView === 'history' ? 'まだ振り返るカードはありません<br>カードが入れ替わると、ここに残ります'
+    e.innerHTML = aiHidden() ? 'ここには自分で書いたカードが出ます<br>下の欄に書いて「追加」（AIのカードは記録だけしています）'
+      : trayView === 'history' ? 'まだ振り返るカードはありません<br>カードが入れ替わると、ここに残ります'
       : S.cycle ? 'トレイのカードはすべてシートに置きました' : 'まだカードはありません<br>「録音をはじめる」を押すと、話し合いからカードが届きます';
   } else if (e) e.remove();
   $('pageNo').textContent = slideNo(S.cur);
@@ -739,7 +804,7 @@ function deleteSlide(id, btn){
 
 // ================= テキストボックス（PowerPointと同じ：置きたい所をクリックして文字を打つ） =================
 let textMode = false, selText = null, editingText = null;
-const DEFAULT_HINT = 'カードは右のトレイからドラッグ（左のスライドに落とすとそのスライドへ）。カードやメンバー名はダブルクリックで書き直せる';
+const DEFAULT_HINT = 'カードは右のトレイからドラッグ（左のスライドに落とすとそのスライドへ）。カードはダブルクリックで書き直せる。メンバー名はクリックして打ち、名前を選ぶとリーダ（赤）・オブザーバ（青）にできる';
 function placeText(el, t){
   el.style.left = t.x + '%'; el.style.top = t.y + '%'; el.style.width = t.w + '%';
   el.style.fontSize = (t.size * PT2CQW).toFixed(3) + 'cqw';
@@ -875,7 +940,7 @@ function deliver(newCards){
     S.cards.push(c); log('deliver', c, {kind: c.kind}); added++;
   });
   render(); save();
-  toast(added ? `カードが ${added} 枚届きました` : '新しいカードはありませんでした（同じ話題は ×回数 が増えています）');
+  if (!aiHidden()) toast(added ? `カードが ${added} 枚届きました` : '新しいカードはありませんでした（同じ話題は ×回数 が増えています）');
 }
 
 $('manualForm').onsubmit = e => {
@@ -996,6 +1061,7 @@ function newRecorder(){
     const t0 = r._t0, t1 = Date.now();
     const blob = new Blob(chunks, {type: r.mimeType || 'audio/webm'});
     if (blob.size < 2000){ log('seg_empty', null, {seg_start: t0, seg_end: t1, bytes: blob.size}); return; }   // ほぼ無音・極短
+    AudioStore.put(S.session_id, t0, t1, blob).catch(e => log('audio_backup_fail', null, {seg_start: t0, error: String(e && e.message || e).slice(0, 80)}));
     pendingTranscribes++; paintRec();
     transcribeChain = transcribeChain.then(() => transcribe(blob, t0, t1)).finally(() => { pendingTranscribes--; paintRec(); });
   };
@@ -1067,11 +1133,43 @@ async function makeCards(trigger){
   }
 }
 
+// マイクが取れなかった理由を見分けて、やることを返す（記録にも残す）
+function micProblem(e){
+  const name = (e && e.name) || (e && e.message) || String(e);
+  const inFrame = (() => { try { return window.self !== window.top; } catch (_) { return true; } })();
+  let msg;
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+    msg = 'この画面ではマイクを使えません。アプリの中で開いている場合は、ChromeかEdgeでURLを直接開き直してください。';
+  else if (typeof MediaRecorder === 'undefined')
+    msg = 'このブラウザは録音に対応していません。ChromeかEdgeの新しい版で開いてください。';
+  else if (inFrame && /NotAllowed|Security/.test(name))
+    msg = '別のページの中に埋め込まれているため、マイクを使えません。GraRecのURLを直接開いてください。';
+  else if (/NotAllowed|Security|PermissionDenied/.test(name))
+    msg = 'マイクがブロックされています。アドレスバー左のマーク → マイク →「許可」にして、ページを再読み込みしてください。それでもだめなら、パソコンの設定（プライバシー → マイク）でブラウザがオンになっているか確認してください。';
+  else if (/NotFound|Overconstrained|DevicesNotFound/.test(name))
+    msg = 'マイクが見つかりません。マイク付きのイヤホンをつなぐか、別のパソコンで録音してください。';
+  else if (/NotReadable|TrackStart|Abort/.test(name))
+    msg = 'ほかのアプリ（Zoom・Teams など）がマイクを使っている可能性があります。閉じてから、もう一度「録音をはじめる」を押してください。';
+  else
+    msg = 'マイクが使えません（' + name + '）。ブラウザとパソコンのマイクの許可を確認してください。';
+  const info = {name: String(name).slice(0, 60), msg: String(e && e.message || '').slice(0, 120), secure: window.isSecureContext,
+                in_frame: inFrame, has_md: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+                has_mr: typeof MediaRecorder !== 'undefined', ua: navigator.userAgent.slice(0, 160)};
+  const done = perm => { log('mic_fail', null, {...info, perm}); save(); };
+  try { navigator.permissions.query({name: 'microphone'}).then(r => done(r.state), () => done('unknown')); } catch (_) { done('unknown'); }
+  return msg;
+}
 async function startRecording(){
   try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') throw new Error('unsupported');
     if (!stream) stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true}});
   } catch (e) {
-    banner('マイクが使えません。ブラウザのマイクの許可を確認してください。');
+    banner(micProblem(e));
+    return;
+  }
+  try { recorder = newRecorder(); } catch (e) {
+    stream.getTracks().forEach(t => t.stop()); stream = null; recorder = null;
+    banner(micProblem(e));
     return;
   }
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1079,7 +1177,7 @@ async function startRecording(){
   audioCtx.createMediaStreamSource(stream).connect(analyser);
   recording = true;
   if (!S.recStartedAt) S.recStartedAt = Date.now();
-  recorder = newRecorder(); recorder.start();
+  recorder.start();
   segTimer = setInterval(rotate, SEGMENT_MS);
   scheduleNextCard();
   tickTimer = setInterval(() => { if (recording && !extracting && Date.now() >= nextCardAt) makeCards('auto'); paintRec(); }, 1000);
@@ -1101,6 +1199,7 @@ function stopRecording(){
   if (audioCtx){ try { audioCtx.close(); } catch (_) {} audioCtx = null; analyser = null; }
   $('level').style.width = '0';
   log('rec_stop'); paintRec(); save();
+  banner('授業が終わったら、上の「記録と録音を保存」を押して、このPCにも保存してください');
   keepAwake(false);
 }
 let wakeLock = null, warnedMobile = false;
@@ -1215,13 +1314,22 @@ window.addEventListener('pagehide', () => {
   } catch (_) {}
 });
 function restore(d){
-  const keys = ['session_id','group_number','kadai_no','task_hint','leader_id','members','cards','events','transcript','plan','cycle','lastExtracted','pendingText','created_at','voice','speech','balTrace','recStartedAt','slides','cur','texts'];
+  const keys = ['session_id','group_number','kadai_no','task_hint','leader_id','members','cards','events','transcript','plan','cycle','lastExtracted','pendingText','created_at','voice','speech','balTrace','recStartedAt','slides','cur','texts','aiMode'];
   S.slides = [{id: 's1'}]; S.cur = 's1'; S.texts = [];
   keys.forEach(k => { if (d[k] !== undefined) S[k] = d[k]; });
   uid = S.cards.length;
   applyHeader(); render(); paintBalance();
 }
+const aiHidden = () => S.aiMode === 'hidden';
+function applyAiMode(){
+  document.body.classList.toggle('ai-hidden', aiHidden());
+  $('aiBadge').hidden = !aiHidden();
+}
+if (new URLSearchParams(location.search).get('ai') === 'hidden') setTimeout(() => {   // 開始画面にも出す
+  const h = document.querySelector('#startForm h1'); if (h) h.textContent += '（AIのカードは画面に出さない）';
+}, 0);
 function applyHeader(){
+  applyAiMode();
   $('kadaiNo').value = S.kadai_no; $('leaderId').value = S.leader_id || '';
   if (SHEET === 'design') $('leaderId').value = S.task_hint || '';
   $('groupBadge').textContent = S.group_number + '班'; $('groupBadge').hidden = !S.group_number;
@@ -1251,12 +1359,13 @@ $('startForm').onsubmit = e => {
   const g = $('startGroup').value.trim(), k = $('startKadai').value.trim() || '1-1';
   Object.assign(S, {group_number: g, kadai_no: k, task_hint: $('startHint').value.trim(), created_at: nowISO(),
     session_id: SHEET === 'design' ? `design_${g}班_${stamp()}` : `kadai_${g}班_${k}_${stamp()}`, cards: [], events: [], transcript: [], cycle: 0, lastExtracted: '', pendingText: '',
-    members: [{name: '', role: 'leader'}], leader_id: '', plan: $('intervalSel').value,
+    members: [], leader_id: '', plan: $('intervalSel').value,
     voice: {enabled: false, slots: {}}, speech: [], balTrace: [], recStartedAt: 0,
-    slides: SHEET === 'design' ? DT_PHASES.map((t, i) => ({id: 's' + (i + 1), tpl: t})) : [{id: 's1'}], cur: 's1', texts: []});
+    slides: SHEET === 'design' ? DT_PHASES.map((t, i) => ({id: 's' + (i + 1), tpl: t})) : [{id: 's1'}], cur: 's1', texts: [],
+    aiMode: new URLSearchParams(location.search).get('ai') === 'hidden' ? 'hidden' : 'shown'});
   selText = null; editingText = null;
   lastBalState = ''; nudgeShown = false; offSince = null; nudgeSnoozeUntil = 0;
-  log('session_start', null, {sheet: SHEET, config: {quick: QUICK, segment_ms: SEGMENT_MS, max_cards: MAX_CARDS, plan: S.plan,
+  log('session_start', null, {sheet: SHEET, ai_mode: S.aiMode, config: {quick: QUICK, segment_ms: SEGMENT_MS, max_cards: MAX_CARDS, plan: S.plan,
     bal_window_ms: BAL_WINDOW, bal_threshold: BAL_THRESHOLD, quiet_share: QUIET_SHARE, bal_min_speech: BAL_MIN_SPEECH,
     bal_warmup_ms: BAL_WARMUP, nudge_snooze_ms: NUDGE_SNOOZE, ua: navigator.userAgent.slice(0, 120)}});
   $('startOverlay').hidden = true;
@@ -1277,6 +1386,88 @@ if (qs){
     if (d.ok && d.session){ restore(d.session); $('startOverlay').hidden = true; }
   }).catch(() => {});
 }
+// ================= 録音の控え（ブラウザの中）と、手元への保存 =================
+const AudioStore = (() => {
+  let dbp = null;
+  const open = () => dbp || (dbp = new Promise((res, rej) => {
+    if (!('indexedDB' in window)) return rej(new Error('indexedDB なし'));
+    const r = indexedDB.open('grarec_audio', 1);
+    r.onupgradeneeded = () => { const st = r.result.createObjectStore('seg', {keyPath: 'key'}); st.createIndex('sid', 'sid'); };
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  }));
+  const done = t => new Promise((res, rej) => { t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error); });
+  return {
+    async put(sid, t0, t1, blob){
+      const db = await open(); const t = db.transaction('seg', 'readwrite');
+      t.objectStore('seg').put({key: sid + '|' + t0, sid, t0, t1, type: blob.type, blob, savedAt: Date.now()});
+      return done(t);
+    },
+    async list(sid){
+      const db = await open(); const out = [];
+      await new Promise((res, rej) => {
+        const req = db.transaction('seg').objectStore('seg').index('sid').openCursor(IDBKeyRange.only(sid));
+        req.onsuccess = () => { const c = req.result; if (c){ out.push(c.value); c.continue(); } else res(); };
+        req.onerror = () => rej(req.error);
+      });
+      return out.sort((a, b) => a.t0 - b.t0);
+    },
+    async purgeOlderThan(days){
+      const db = await open(); const t = db.transaction('seg', 'readwrite'); const limit = Date.now() - days * 86400000;
+      const req = t.objectStore('seg').openCursor();
+      req.onsuccess = () => { const c = req.result; if (c){ if (c.value.savedAt < limit) c.delete(); c.continue(); } };
+      return done(t);
+    }
+  };
+})();
+AudioStore.purgeOlderThan(14).catch(() => {});
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+const p2 = n => String(n).padStart(2, '0');
+const hms = ms => { const d = new Date(ms); return p2(d.getHours()) + p2(d.getMinutes()) + p2(d.getSeconds()); };
+const asciiName = s => s.replace(/[^\w.\-]/g, '_');
+function loadJSZip(){
+  if (window.JSZip) return Promise.resolve(window.JSZip);
+  return new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    sc.onload = () => window.JSZip ? res(window.JSZip) : rej(new Error('JSZip なし'));
+    sc.onerror = () => rej(new Error('JSZip を読み込めない'));
+    document.head.appendChild(sc);
+    setTimeout(() => rej(new Error('JSZip の読み込みが遅い')), 15000);
+  });
+}
+function saveBlob(blob, name){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+$('backupBtn').onclick = async () => {
+  if (!S.session_id){ toast('まだ記録がありません'); return; }
+  const btn = $('backupBtn'); btn.disabled = true; const label = btn.textContent; btn.textContent = '保存の準備中…';
+  try {
+    const segs = await AudioStore.list(S.session_id).catch(() => []);
+    const sid = S.session_id, base = asciiName(`grarec_g${S.group_number || 'x'}_${sid.replace(/^.*?_(\d{8}_\d{6})$/, '$1')}`);
+    const json = new Blob([JSON.stringify(snapshot(), null, 1)], {type: 'application/json'});
+    const files = segs.map(x => ({name: `recordings/rec_${hms(x.t0)}-${hms(x.t1)}.${extOf(x.type)}`, blob: x.blob}));
+    const bytes = files.reduce((a, f) => a + f.blob.size, 0);
+    try {
+      const JSZip = await loadJSZip();
+      const zip = new JSZip();
+      zip.file('session.json', json);
+      files.forEach(f => zip.file(f.name, f.blob));
+      zip.file('README.txt', `GraRec の記録と録音（${sid}）\nsession.json … カード・置き方・テキスト・文字起こし・使われ方の記録\nrecordings/ … 90秒ごとの録音（ファイル名は録音の開始-終了時刻）\n`);
+      saveBlob(await zip.generateAsync({type: 'blob', compression: 'STORE'}), base + '.zip');
+    } catch (e) {
+      // ZIPが作れないときは1つずつ（ブラウザが「複数ファイルのダウンロード」を聞いてきたら許可する）
+      console.warn('zip', e);
+      saveBlob(json, base + '_session.json');
+      for (const f of files){ await new Promise(r => setTimeout(r, 400)); saveBlob(f.blob, base + '_' + f.name.replace('recordings/', '')); }
+    }
+    log('backup_download', null, {segments: files.length, bytes}); save();
+    toast(`保存しました（記録と録音 ${files.length} 区間）`);
+  } catch (e) {
+    banner('保存できませんでした：' + (e && e.message || e));
+  } finally { btn.disabled = false; btn.textContent = label; }
+};
+
 $('newBtn').onclick = () => {
   if (recording) stopRecording();
   // 声のサンプルはシートを閉じたら消す
@@ -1326,7 +1517,7 @@ async function recordVoice(v){
   const sl = S.voice.slots[v]; sl.err = '';
   let st;
   try { st = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true}}); }
-  catch (e) { sl.err = 'マイクが使えません。ブラウザの許可を確認してください'; renderVoice(); return; }
+  catch (e) { sl.err = micProblem(e); renderVoice(); return; }
   voiceRecSlot = v; renderVoice();
   const r = new MediaRecorder(st); const chunks = [];
   r.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };

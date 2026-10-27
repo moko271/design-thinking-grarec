@@ -75,7 +75,7 @@ window.DEMO_SETUP = () => {
   Object.assign(S, {group_number: String(D.group), kadai_no: '1-1', session_id: 'demo', created_at: new Date().toISOString()});
   $('startOverlay').hidden = true; $('voiceOverlay').hidden = true;
   $('groupBadge').textContent = D.group + '班（デモ）'; $('groupBadge').hidden = false;
-  ['rec', 'newBtn', 'nowBtn'].forEach(id => { const e = $(id); if (e) e.style.display = 'none'; });
+  ['rec', 'newBtn', 'nowBtn', 'backupBtn'].forEach(id => { const e = $(id); if (e) e.style.display = 'none'; });
   const iv = document.querySelector('.interval'); if (iv) iv.style.display = 'none';
   K.render();
 };
@@ -91,7 +91,7 @@ window.DEMO_SETUP = () => {
   $('leaderId').value = S.task_hint;
   $('startOverlay').hidden = true; $('voiceOverlay').hidden = true;
   $('groupBadge').textContent = D.group + '班（デモ）'; $('groupBadge').hidden = false;
-  ['rec', 'newBtn', 'nowBtn'].forEach(id => { const e = $(id); if (e) e.style.display = 'none'; });
+  ['rec', 'newBtn', 'nowBtn', 'backupBtn'].forEach(id => { const e = $(id); if (e) e.style.display = 'none'; });
   const iv = document.querySelector('.interval'); if (iv) iv.style.display = 'none';
   K.render();
 };
