@@ -14,6 +14,8 @@ GraRec ボード（/board）：マイクで録音しながら、AIが付箋を�
        その記録がないと文字起こしを受け付けない
   ボードの持ち主は「研究に使う」をいつでも外せる。外したボード・消したボードは研究用の書き出しに入らない
   招待コードは渡す相手ごとに1つ作る：/board/admin（コードごとに登録できる人数と録音時間の上限、止める・再開）
+- 操作の記録（events テーブル）：AIの付箋が出た・置いた、採用・却下・戻す・追加・編集・移動・色・削除・矢印・題名・録音の開始と停止を、
+  1つずつ保存する（実際の時刻、録音の何秒目か、だれ＝番号、どの付箋、前と後の中身）。ボードの「振り返り」でその時点のボードを再生できる
   研究用の書き出し：/board/admin/export（ADMIN_USERNAME / ADMIN_PASSWORD の Basic 認証。未設定なら使えない）
 
 app.py からは次の2行だけで組み込む（/kadai など、ほかの画面には触らない）:
@@ -49,7 +51,7 @@ _board_locks = {}
 _locks_guard = threading.Lock()
 _fails = {}   # ログイン失敗の回数（ユーザー名ごと、メモリだけ）
 
-CONSENT_VER = "2026-11-24"   # 説明文（static/board.html の CONSENT）を変えたら、ここの日付も変える
+CONSENT_VER = "2026-11-24.2"   # 説明文（static/board.html の CONSENT）を変えたら、ここの日付も変える
 CONSENT_MAX_AGE = 12 * 3600   # 録音前の確認は12時間有効（それより後は確認し直す）
 HALLUCINATION = ("ご視聴ありがとうございました", "チャンネル登録", "最後までご視聴", "おやすみなさい")
 WHISPER_HINT = "グループワークの話し合いです。"
@@ -111,6 +113,9 @@ def init_board(app, client, chat_json, data_dir):
             c.execute("ALTER TABLE users ADD COLUMN consent_ver TEXT")
         if "invite_id" not in cols:
             c.execute("ALTER TABLE users ADD COLUMN invite_id INTEGER")
+        c.execute("""CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, board TEXT NOT NULL, user INTEGER,
+            type TEXT, obj TEXT, before TEXT, after TEXT, rec_t REAL, client_ms REAL, at TEXT, at_ts REAL)""")
+        c.execute("CREATE INDEX IF NOT EXISTS events_board ON events(board, client_ms)")
         cols = {r[1] for r in c.execute("PRAGMA table_info(boards)")}
         if "research_ok" not in cols:
             c.execute("ALTER TABLE boards ADD COLUMN research_ok INTEGER DEFAULT 1")
@@ -398,6 +403,52 @@ def record_consent(uid, bid):
     return jsonify(ok=True, consent_id=cid)
 
 
+EVENT_TYPES = {"ai_card", "ai_place", "band_add", "adopt", "reject", "restore", "add", "edit", "move", "color",
+               "delete", "link", "title", "rec_start", "rec_stop"}
+
+
+def _small(v):
+    if v is None:
+        return None
+    raw = json.dumps(v, ensure_ascii=False)
+    return raw if len(raw) <= 4000 else None
+
+
+def _log_events(c, bid, uid, evs):
+    now = time.time()
+    for e in evs[:500]:
+        if not isinstance(e, dict) or e.get("type") not in EVENT_TYPES:
+            continue
+        try:
+            ms = float(e.get("ms") or now * 1000)
+            rt = float(e["rec_t"]) if e.get("rec_t") is not None else None
+        except (TypeError, ValueError):
+            ms, rt = now * 1000, None
+        if abs(ms / 1000 - now) > 3600:   # 端末の時計が大きくずれているときはサーバーの時刻を使う
+            ms = now * 1000
+        c.execute("INSERT INTO events(board, user, type, obj, before, after, rec_t, client_ms, at, at_ts) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                  (bid, uid, e["type"], str(e.get("obj") or "")[:40], _small(e.get("before")), _small(e.get("after")),
+                   rt, ms, _now(), now))
+
+
+@bp.route("/board/api/boards/<bid>/events")
+@login_required
+def board_events(uid, bid):
+    """振り返り用：このボードの操作の記録と、だれ（ボードの人の中での番号）"""
+    with _db() as c:
+        b, _ = _can(c, bid, uid)
+        if not b:
+            return jsonify(ok=False, error="ボードが見つかりません"), 404
+        rows = c.execute("SELECT e.*, u.username FROM events e LEFT JOIN users u ON u.id=e.user WHERE board=? "
+                         "ORDER BY client_ms, id", (bid,)).fetchall()
+    out = []
+    for r in rows:
+        out.append({"type": r["type"], "obj": r["obj"], "before": json.loads(r["before"]) if r["before"] else None,
+                    "after": json.loads(r["after"]) if r["after"] else None, "rec_t": r["rec_t"], "ms": r["client_ms"],
+                    "who": r["username"] or ""})
+    return jsonify(ok=True, events=out)
+
+
 @bp.route("/board/api/boards/<bid>/save", methods=["POST"])
 @login_required
 def save_board(uid, bid):
@@ -423,6 +474,8 @@ def save_board(uid, bid):
             ver = b["ver"] + 1
             title = str(d["title"]).strip()[:60] if d.get("title") else b["title"]
             c.execute("UPDATE boards SET state=?, ver=?, title=?, updated=? WHERE id=?", (raw, ver, title, _now(), bid))
+            if isinstance(d.get("events"), list):
+                _log_events(c, bid, uid, d["events"])
     return jsonify(ok=True, ver=ver)
 
 
@@ -436,6 +489,7 @@ def delete_board(uid, bid):
         if owner:
             c.execute("DELETE FROM boards WHERE id=?", (bid,))
             c.execute("DELETE FROM members WHERE board=?", (bid,))
+            c.execute("DELETE FROM events WHERE board=?", (bid,))
         else:   # 共有されたボードは、自分の一覧から外すだけ
             c.execute("DELETE FROM members WHERE board=? AND user=?", (bid, uid))
     return jsonify(ok=True, deleted=owner)
@@ -520,7 +574,7 @@ def _contain(a, b):
     return len(A & B) / len(A) if A else 0.0
 
 
-def _transcribe(path, t0):
+def _transcribe(path, t0, started=None):
     client = CFG["client"]
     with open(path, "rb") as f:
         res = client.audio.transcriptions.create(model="whisper-1", file=f, language="ja",
@@ -535,11 +589,14 @@ def _transcribe(path, t0):
             continue
         if float(s.get("no_speech_prob") or 0) > 0.8 and float(s.get("avg_logprob") or 0) < -1.0:
             continue
-        utts.append({"t": round(t0 + float(s.get("start") or 0), 1), "who": "話者", "text": tx})
+        u = {"t": round(t0 + float(s.get("start") or 0), 1), "who": "話者", "text": tx}
+        if started:
+            u["ms"] = round(started + float(s.get("start") or 0) * 1000)
+        utts.append(u)
     if not segs:
         tx = (d.get("text") or "").strip()
         if tx and not (any(h in tx for h in HALLUCINATION) and len(tx) < 25):
-            utts.append({"t": round(t0, 1), "who": "話者", "text": tx})
+            utts.append({"t": round(t0, 1), "who": "話者", "text": tx, **({"ms": round(started)} if started else {})})
     return utts
 
 
@@ -640,7 +697,13 @@ def chunk(uid, bid):
                 if not b:
                     return jsonify(ok=False, error="ボードが見つかりません"), 404
                 t0 = float(b["rec_sec"] or 0)
-            new = _transcribe(path, t0)
+            try:
+                started = float(request.form.get("started_ms") or 0) or None
+            except ValueError:
+                started = None
+            if started and abs(started / 1000 - time.time()) > 3600:
+                started = None
+            new = _transcribe(path, t0, started)
             with _db() as c:
                 c.execute("INSERT INTO usage(user, day, sec) VALUES(?,?,?) ON CONFLICT(user, day) DO UPDATE SET sec=sec+?",
                           (uid, _today(), dur, dur))
@@ -655,6 +718,7 @@ def chunk(uid, bid):
             with _db() as c:
                 c.execute("UPDATE boards SET utts=?, ai=?, rec_sec=?, updated=? WHERE id=?",
                           (json.dumps(utts, ensure_ascii=False), json.dumps(ai, ensure_ascii=False), t0 + dur, _now(), bid))
+                _log_events(c, bid, uid, [{"type": "ai_card", "obj": x["id"], "after": x, "rec_t": x["t"]} for x in added])
         return jsonify(ok=True, utts=new, cards=added, rec_sec=t0 + dur, usage=_usage_info(uid))
     except Exception as e:
         print("board chunk error:", traceback.format_exc())
@@ -689,11 +753,15 @@ def export():
         out = []
         for b in boards:
             cons = [dict(r) for r in c.execute("SELECT kind, user, ver, at, n_people FROM consents WHERE board=? ORDER BY id", (b["id"],))]
+            evs = [{"type": r["type"], "user": r["user"], "obj": r["obj"], "rec_t": r["rec_t"], "client_ms": r["client_ms"],
+                    "at": r["at"], "before": json.loads(r["before"]) if r["before"] else None,
+                    "after": json.loads(r["after"]) if r["after"] else None}
+                   for r in c.execute("SELECT * FROM events WHERE board=? ORDER BY client_ms, id", (b["id"],))]
             members = [r[0] for r in c.execute("SELECT user FROM members WHERE board=?", (b["id"],))]
             out.append({"board": b["id"], "owner": b["owner"], "members": members, "title": b["title"],
                         "agenda": json.loads(b["agenda"] or "[]"), "created": b["created"], "updated": b["updated"],
                         "rec_sec": b["rec_sec"], "utts": json.loads(b["utts"] or "[]"), "ai": json.loads(b["ai"] or "{}"),
-                        "state": json.loads(b["state"] or "{}"), "consents": cons})
+                        "state": json.loads(b["state"] or "{}"), "consents": cons, "events": evs})
     r = jsonify(exported=_now(), consent_ver=CONSENT_VER, boards=out)
     r.headers["Content-Disposition"] = "attachment; filename=grarec_board_export.json"
     return r
