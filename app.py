@@ -2204,6 +2204,14 @@ def transcribe_diarize():
 
 
 # =========================
+# GraRec ボード（/board）：アカウント・マイク録音・AI付箋。中身は board_app.py
+# （/kadai など、ほかの画面には触らない）
+# =========================
+from board_app import init_board
+init_board(app, client, card_chat_json, DATA_DIR)
+
+
+# =========================
 # エントリポイント
 # =========================
 if __name__ == "__main__":
