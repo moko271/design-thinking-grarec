@@ -13,6 +13,7 @@ GraRec ボード（/board）：マイクで録音しながら、AIが付箋を�
     2. 録音を始めるたび：録音する人が「今いる参加者みんなに伝えて同意をもらった・全員18歳以上」を確かめる。
        その記録がないと文字起こしを受け付けない
   ボードの持ち主は「研究に使う」をいつでも外せる。外したボード・消したボードは研究用の書き出しに入らない
+  招待コードは渡す相手ごとに1つ作る：/board/admin（コードごとに登録できる人数と録音時間の上限、止める・再開）
   研究用の書き出し：/board/admin/export（ADMIN_USERNAME / ADMIN_PASSWORD の Basic 認証。未設定なら使えない）
 
 app.py からは次の2行だけで組み込む（/kadai など、ほかの画面には触らない）:
@@ -20,7 +21,7 @@ app.py からは次の2行だけで組み込む（/kadai など、ほかの画�
     init_board(app, client, card_chat_json, DATA_DIR)
 
 環境変数:
-    BOARD_INVITE_CODE      新規登録に使う招待コード（未設定なら登録できない）
+    BOARD_INVITE_CODE      （古い方式）全員共通の招待コード。1人1つのコード（/board/admin で作る）に切り替えたら消してよい
     BOARD_DAILY_MIN        1アカウント1日あたりの録音の上限（分）。既定 120
     BOARD_GLOBAL_DAILY_MIN 全員合計の1日あたりの上限（分）。既定 600
     SECRET_KEY             ログインのクッキーを署名する鍵（未設定ならデータフォルダに作って使い回す）
@@ -103,9 +104,13 @@ def init_board(app, client, chat_json, data_dir):
         CREATE TABLE IF NOT EXISTS consents(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, user INTEGER NOT NULL,
             board TEXT, ver TEXT, at TEXT, at_ts REAL, n_people INTEGER, detail TEXT);
         """)
+        c.execute("""CREATE TABLE IF NOT EXISTS invites(id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE NOT NULL,
+            memo TEXT, max_users INTEGER, max_min REAL, active INTEGER DEFAULT 1, created TEXT)""")
         cols = {r[1] for r in c.execute("PRAGMA table_info(users)")}
         if "consent_ver" not in cols:
             c.execute("ALTER TABLE users ADD COLUMN consent_ver TEXT")
+        if "invite_id" not in cols:
+            c.execute("ALTER TABLE users ADD COLUMN invite_id INTEGER")
         cols = {r[1] for r in c.execute("PRAGMA table_info(boards)")}
         if "research_ok" not in cols:
             c.execute("ALTER TABLE boards ADD COLUMN research_ok INTEGER DEFAULT 1")
@@ -157,10 +162,29 @@ def _used(uid):
     return (r["sec"] if r else 0.0), g
 
 
+def _invite_left(uid):
+    """その人の招待コードで使える録音の残り（秒）。上限がないコード・古い共通コードなら None"""
+    with _db() as c:
+        r = c.execute("SELECT i.id, i.max_min FROM users u JOIN invites i ON i.id=u.invite_id WHERE u.id=?", (uid,)).fetchone()
+        if not r or not r["max_min"]:
+            return None
+        used = c.execute("SELECT COALESCE(SUM(sec),0) FROM usage WHERE user IN (SELECT id FROM users WHERE invite_id=?)",
+                         (r["id"],)).fetchone()[0]
+    return r["max_min"] * 60 - used
+
+
 def _usage_info(uid):
     mine, allu = _used(uid)
+    left = min(CFG["daily"] - mine, CFG["global_daily"] - allu)
+    inv = _invite_left(uid)
+    if inv is not None:
+        left = min(left, inv)
     return {"used_min": round(mine / 60, 1), "limit_min": round(CFG["daily"] / 60),
-            "left_min": round(max(0, min(CFG["daily"] - mine, CFG["global_daily"] - allu)) / 60, 1)}
+            "left_min": round(max(0, left) / 60, 1)}
+
+
+def _norm_code(code):
+    return re.sub(r"[\s　]", "", str(code or "")).lower()
 
 
 @bp.route("/board")
@@ -176,7 +200,7 @@ def me():
     u = _user(uid) if uid else None
     if not u:
         session.pop("uid", None)
-        return jsonify(ok=True, user=None, signup=bool(CFG["invite"]), consent_ver=CONSENT_VER, contact=CFG["contact"])
+        return jsonify(ok=True, user=None, signup=True, consent_ver=CONSENT_VER, contact=CFG["contact"])
     with _db() as c:
         cv = c.execute("SELECT consent_ver FROM users WHERE id=?", (uid,)).fetchone()["consent_ver"]
     return jsonify(ok=True, user=u["username"], usage=_usage_info(uid), consent_needed=cv != CONSENT_VER,
@@ -217,11 +241,6 @@ def signup():
         return jsonify(ok=False, error="不正なリクエストです"), 400
     d = request.get_json(silent=True) or {}
     code, name, pw = str(d.get("code", "")), str(d.get("username", "")).strip(), str(d.get("password", ""))
-    if not CFG["invite"]:
-        return jsonify(ok=False, error="いまは新しい登録を受け付けていません"), 403
-    if not secrets.compare_digest(code.encode(), CFG["invite"].encode()):
-        time.sleep(1)
-        return jsonify(ok=False, error="招待コードが違います"), 403
     if not re.fullmatch(r"[\w\-.]{2,20}", name):
         return jsonify(ok=False, error="IDは2〜20文字（文字・数字・_ - .）にしてください"), 400
     if len(pw) < 6 or len(pw) > 100:
@@ -230,8 +249,21 @@ def signup():
         return jsonify(ok=False, error="研究への協力の説明に同意し、18歳以上であることを確かめてください"), 400
     try:
         with _db() as c:
-            cur = c.execute("INSERT INTO users(username, pw, created, consent_ver) VALUES(?,?,?,?)",
-                            (name, generate_password_hash(pw), _now(), CONSENT_VER))
+            c.execute("BEGIN IMMEDIATE")   # 人数の上限を数えてから登録するまでを、ほかの登録と重ならないように
+            inv = c.execute("SELECT * FROM invites WHERE code=?", (_norm_code(code),)).fetchone()
+            invite_id = None
+            if inv:
+                n = c.execute("SELECT COUNT(*) FROM users WHERE invite_id=?", (inv["id"],)).fetchone()[0]
+                if not inv["active"]:
+                    return jsonify(ok=False, error="この招待コードはいま使えません。もこに連絡してください"), 403
+                if inv["max_users"] and n >= inv["max_users"]:
+                    return jsonify(ok=False, error="この招待コードで登録できる人数がいっぱいです。もこに連絡してください"), 403
+                invite_id = inv["id"]
+            elif not (CFG["invite"] and secrets.compare_digest(code.encode(), CFG["invite"].encode())):
+                time.sleep(1)
+                return jsonify(ok=False, error="招待コードが違います"), 403
+            cur = c.execute("INSERT INTO users(username, pw, created, consent_ver, invite_id) VALUES(?,?,?,?,?)",
+                            (name, generate_password_hash(pw), _now(), CONSENT_VER, invite_id))
             uid = cur.lastrowid
             _record_consent(c, "account", uid, detail={"adult": True})
     except sqlite3.IntegrityError:
@@ -586,6 +618,9 @@ def chunk(uid, bid):
     mine, allu = _used(uid)
     if mine + dur > CFG["daily"] + 30 or allu + dur > CFG["global_daily"] + 30:
         return jsonify(ok=False, limit=True, error="今日の録音の上限に達しました。明日また使えます"), 429
+    inv = _invite_left(uid)
+    if inv is not None and inv < dur - 30:
+        return jsonify(ok=False, limit=True, error="この招待コードで使える録音時間の上限に達しました。もこに連絡してください"), 429
     with _db() as c:
         b, _ = _can(c, bid, uid)
     if not b:
@@ -662,3 +697,92 @@ def export():
     r = jsonify(exported=_now(), consent_ver=CONSENT_VER, boards=out)
     r.headers["Content-Disposition"] = "attachment; filename=grarec_board_export.json"
     return r
+
+
+# ---------------- 招待コードの管理（/board/admin） ----------------
+CODE_CHARS = "abcdefghjkmnpqrstuvwxyz23456789"   # 見まちがえやすい i l o 0 1 は使わない
+
+
+def _new_code(c):
+    while True:
+        k = "".join(secrets.choice(CODE_CHARS) for _ in range(8))
+        code = f"{k[:4]}-{k[4:]}"
+        if not c.execute("SELECT 1 FROM invites WHERE code=?", (code,)).fetchone():
+            return code
+
+
+def _admin_required(f):
+    @wraps(f)
+    def w(*a, **k):
+        if not _admin_ok():
+            return ("Authentication required", 401, {"WWW-Authenticate": 'Basic realm="GraRec Board Admin"'})
+        if request.method != "GET" and request.headers.get("X-GraRec") != "1":
+            return jsonify(ok=False, error="不正なリクエストです"), 400
+        return f(*a, **k)
+    return w
+
+
+@bp.route("/board/admin")
+@_admin_required
+def admin_page():
+    r = send_from_directory("static", "board_admin.html")
+    r.headers["Cache-Control"] = "no-store"
+    return r
+
+
+@bp.route("/board/admin/api/invites")
+@_admin_required
+def admin_invites():
+    with _db() as c:
+        out = []
+        for i in c.execute("SELECT * FROM invites ORDER BY id DESC").fetchall():
+            us = c.execute("SELECT id, username, created FROM users WHERE invite_id=? ORDER BY id", (i["id"],)).fetchall()
+            ids = [u["id"] for u in us]
+            used = boards = 0
+            if ids:
+                q = ",".join("?" * len(ids))
+                used = c.execute(f"SELECT COALESCE(SUM(sec),0) FROM usage WHERE user IN ({q})", ids).fetchone()[0]
+                boards = c.execute(f"SELECT COUNT(*) FROM boards WHERE owner IN ({q})", ids).fetchone()[0]
+            out.append({"id": i["id"], "code": i["code"], "memo": i["memo"], "max_users": i["max_users"],
+                        "max_min": i["max_min"], "active": bool(i["active"]), "created": i["created"],
+                        "users": [{"name": u["username"], "created": u["created"]} for u in us],
+                        "used_min": round(used / 60, 1), "boards": boards})
+        legacy = c.execute("SELECT COUNT(*) FROM users WHERE invite_id IS NULL").fetchone()[0]
+    return jsonify(ok=True, invites=out, legacy_users=legacy, legacy_code_on=bool(CFG["invite"]))
+
+
+def _int_or(v, default, lo, hi):
+    try:
+        return max(lo, min(hi, int(v)))
+    except (TypeError, ValueError):
+        return default
+
+
+@bp.route("/board/admin/api/invites", methods=["POST"])
+@_admin_required
+def admin_create_invite():
+    d = request.get_json(silent=True) or {}
+    memo = str(d.get("memo", "")).strip()[:60]
+    max_users = _int_or(d.get("max_users"), 5, 1, 50)
+    max_min = _int_or(d.get("max_min"), 300, 0, 10000)
+    with _db() as c:
+        code = _new_code(c)
+        c.execute("INSERT INTO invites(code, memo, max_users, max_min, active, created) VALUES(?,?,?,?,?,?)",
+                  (code, memo, max_users, max_min or None, 1, _now()))
+    return jsonify(ok=True, code=code)
+
+
+@bp.route("/board/admin/api/invites/<int:iid>", methods=["POST"])
+@_admin_required
+def admin_update_invite(iid):
+    d = request.get_json(silent=True) or {}
+    with _db() as c:
+        if "active" in d:
+            c.execute("UPDATE invites SET active=? WHERE id=?", (1 if d["active"] else 0, iid))
+        if "max_users" in d:
+            c.execute("UPDATE invites SET max_users=? WHERE id=?", (_int_or(d["max_users"], 5, 1, 50), iid))
+        if "max_min" in d:
+            c.execute("UPDATE invites SET max_min=? WHERE id=?", (_int_or(d["max_min"], 300, 0, 10000) or None, iid))
+        if "memo" in d:
+            c.execute("UPDATE invites SET memo=? WHERE id=?", (str(d["memo"]).strip()[:60], iid))
+    return jsonify(ok=True)
