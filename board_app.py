@@ -7,6 +7,13 @@ GraRec ボード（/board）：マイクで録音しながら、AIが付箋を�
 - 録音は1分ごとに区切ってサーバーへ送る → whisper-1 で文字起こし → 付箋を作る（研究の live_eval と同じ流れ）
 - 音声はこのサーバーに残さない（文字起こしが終わったら消す）。文字起こしと付箋はボードに保存する
 - 1人1日あたり・全体で1日あたりの録音時間に上限がある（費用を抑えるため）
+- 研究データとして使う同意を、2段階でとって記録する（consents テーブル）
+    1. 登録するとき：アカウントを作る人が、説明（CONSENT_VER の版）を読んで同意し、18歳以上であることを確かめる
+       （説明の版が変わったら、次にログインしたときにもう一度同意してもらう）
+    2. 録音を始めるたび：録音する人が「今いる参加者みんなに伝えて同意をもらった・全員18歳以上」を確かめる。
+       その記録がないと文字起こしを受け付けない
+  ボードの持ち主は「研究に使う」をいつでも外せる。外したボード・消したボードは研究用の書き出しに入らない
+  研究用の書き出し：/board/admin/export（ADMIN_USERNAME / ADMIN_PASSWORD の Basic 認証。未設定なら使えない）
 
 app.py からは次の2行だけで組み込む（/kadai など、ほかの画面には触らない）:
     from board_app import init_board
@@ -17,6 +24,7 @@ app.py からは次の2行だけで組み込む（/kadai など、ほかの画�
     BOARD_DAILY_MIN        1アカウント1日あたりの録音の上限（分）。既定 120
     BOARD_GLOBAL_DAILY_MIN 全員合計の1日あたりの上限（分）。既定 600
     SECRET_KEY             ログインのクッキーを署名する鍵（未設定ならデータフォルダに作って使い回す）
+    BOARD_CONTACT          説明に出す問い合わせ先（例：東京都市大学 ○○ xxx@example.com）
 """
 import os
 import re
@@ -40,6 +48,8 @@ _board_locks = {}
 _locks_guard = threading.Lock()
 _fails = {}   # ログイン失敗の回数（ユーザー名ごと、メモリだけ）
 
+CONSENT_VER = "2026-11-24"   # 説明文（static/board.html の CONSENT）を変えたら、ここの日付も変える
+CONSENT_MAX_AGE = 12 * 3600   # 録音前の確認は12時間有効（それより後は確認し直す）
 HALLUCINATION = ("ご視聴ありがとうございました", "チャンネル登録", "最後までご視聴", "おやすみなさい")
 WHISPER_HINT = "グループワークの話し合いです。"
 MAX_CHUNK_SEC = 75
@@ -59,7 +69,8 @@ def init_board(app, client, chat_json, data_dir):
     CFG.update(client=client, chat_json=chat_json, db=os.path.join(data_dir, "board.db"),
                invite=os.getenv("BOARD_INVITE_CODE", ""),
                daily=float(os.getenv("BOARD_DAILY_MIN", "120")) * 60,
-               global_daily=float(os.getenv("BOARD_GLOBAL_DAILY_MIN", "600")) * 60)
+               global_daily=float(os.getenv("BOARD_GLOBAL_DAILY_MIN", "600")) * 60,
+               contact=os.getenv("BOARD_CONTACT", "東京都市大学 情報工学部 知能情報工学科　宗高萌絵子（moko._.mk@icloud.com）"))
     if not app.secret_key:
         key = os.getenv("SECRET_KEY", "")
         if not key:
@@ -89,7 +100,15 @@ def init_board(app, client, chat_json, data_dir):
             created TEXT, updated TEXT);
         CREATE TABLE IF NOT EXISTS members(board TEXT, user INTEGER, PRIMARY KEY(board, user));
         CREATE TABLE IF NOT EXISTS usage(user INTEGER, day TEXT, sec REAL DEFAULT 0, PRIMARY KEY(user, day));
+        CREATE TABLE IF NOT EXISTS consents(id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, user INTEGER NOT NULL,
+            board TEXT, ver TEXT, at TEXT, at_ts REAL, n_people INTEGER, detail TEXT);
         """)
+        cols = {r[1] for r in c.execute("PRAGMA table_info(users)")}
+        if "consent_ver" not in cols:
+            c.execute("ALTER TABLE users ADD COLUMN consent_ver TEXT")
+        cols = {r[1] for r in c.execute("PRAGMA table_info(boards)")}
+        if "research_ok" not in cols:
+            c.execute("ALTER TABLE boards ADD COLUMN research_ok INTEGER DEFAULT 1")
     app.register_blueprint(bp)
 
 
@@ -114,6 +133,13 @@ def login_required(f):
             return jsonify(ok=False, error="ログインしてください", login=True), 401
         if request.method != "GET" and request.headers.get("X-GraRec") != "1":
             return jsonify(ok=False, error="不正なリクエストです"), 400
+        with _db() as c:
+            r = c.execute("SELECT consent_ver FROM users WHERE id=?", (uid,)).fetchone()
+        if not r:
+            session.clear()
+            return jsonify(ok=False, error="ログインしてください", login=True), 401
+        if r["consent_ver"] != CONSENT_VER:
+            return jsonify(ok=False, error="研究への協力の説明を読んで、同意してください", consent=True), 403
         return f(uid, *a, **k)
     return w
 
@@ -150,8 +176,39 @@ def me():
     u = _user(uid) if uid else None
     if not u:
         session.pop("uid", None)
-        return jsonify(ok=True, user=None, signup=bool(CFG["invite"]))
-    return jsonify(ok=True, user=u["username"], usage=_usage_info(uid))
+        return jsonify(ok=True, user=None, signup=bool(CFG["invite"]), consent_ver=CONSENT_VER, contact=CFG["contact"])
+    with _db() as c:
+        cv = c.execute("SELECT consent_ver FROM users WHERE id=?", (uid,)).fetchone()["consent_ver"]
+    return jsonify(ok=True, user=u["username"], usage=_usage_info(uid), consent_needed=cv != CONSENT_VER,
+                   consent_ver=CONSENT_VER, contact=CFG["contact"])
+
+
+def _record_consent(c, kind, uid, board=None, n_people=None, detail=None):
+    cur = c.execute("INSERT INTO consents(kind, user, board, ver, at, at_ts, n_people, detail) VALUES(?,?,?,?,?,?,?,?)",
+                    (kind, uid, board, CONSENT_VER, _now(), time.time(), n_people,
+                     json.dumps(detail or {}, ensure_ascii=False)))
+    return cur.lastrowid
+
+
+def _account_consent_ok(d):
+    return d.get("agree") is True and d.get("adult") is True and str(d.get("consent_ver")) == CONSENT_VER
+
+
+@bp.route("/board/api/consent", methods=["POST"])
+def consent():
+    """説明の版が変わったあと、ログイン中の人がもう一度同意する"""
+    uid = session.get("uid")
+    if not uid:
+        return jsonify(ok=False, error="ログインしてください", login=True), 401
+    if request.headers.get("X-GraRec") != "1":
+        return jsonify(ok=False, error="不正なリクエストです"), 400
+    d = request.get_json(silent=True) or {}
+    if not _account_consent_ok(d):
+        return jsonify(ok=False, error="説明への同意と、18歳以上であることの確認が必要です"), 400
+    with _db() as c:
+        c.execute("UPDATE users SET consent_ver=? WHERE id=?", (CONSENT_VER, uid))
+        _record_consent(c, "account", uid, detail={"adult": True})
+    return jsonify(ok=True)
 
 
 @bp.route("/board/api/signup", methods=["POST"])
@@ -169,11 +226,14 @@ def signup():
         return jsonify(ok=False, error="IDは2〜20文字（文字・数字・_ - .）にしてください"), 400
     if len(pw) < 6 or len(pw) > 100:
         return jsonify(ok=False, error="パスワードは6文字以上にしてください"), 400
+    if not _account_consent_ok(d):
+        return jsonify(ok=False, error="研究への協力の説明に同意し、18歳以上であることを確かめてください"), 400
     try:
         with _db() as c:
-            cur = c.execute("INSERT INTO users(username, pw, created) VALUES(?,?,?)",
-                            (name, generate_password_hash(pw), _now()))
+            cur = c.execute("INSERT INTO users(username, pw, created, consent_ver) VALUES(?,?,?,?)",
+                            (name, generate_password_hash(pw), _now(), CONSENT_VER))
             uid = cur.lastrowid
+            _record_consent(c, "account", uid, detail={"adult": True})
     except sqlite3.IntegrityError:
         return jsonify(ok=False, error="そのIDはもう使われています"), 409
     session.clear()
@@ -265,7 +325,45 @@ def get_board(uid, bid):
         return jsonify(ok=True, same=True, ver=b["ver"])
     return jsonify(ok=True, id=b["id"], title=b["title"], agenda=json.loads(b["agenda"] or "[]"),
                    state=json.loads(b["state"] or "{}"), ver=b["ver"], utts=json.loads(b["utts"] or "[]"),
-                   rec_sec=b["rec_sec"] or 0, owner=owner, join_token=b["join_token"] if owner else None)
+                   rec_sec=b["rec_sec"] or 0, owner=owner, join_token=b["join_token"] if owner else None,
+                   research_ok=bool(b["research_ok"]))
+
+
+@bp.route("/board/api/boards/<bid>/research", methods=["POST"])
+@login_required
+def set_research(uid, bid):
+    """ボードの持ち主が「研究に使う」を外す（または戻す）。外したボードは研究用の書き出しに入らない"""
+    d = request.get_json(silent=True) or {}
+    ok = 1 if d.get("ok") is True else 0
+    with _db() as c:
+        b, owner = _can(c, bid, uid)
+        if not b or not owner:
+            return jsonify(ok=False, error="ボードの持ち主だけが変えられます"), 403
+        c.execute("UPDATE boards SET research_ok=? WHERE id=?", (ok, bid))
+        _record_consent(c, "research_on" if ok else "research_off", uid, board=bid)
+    return jsonify(ok=True, research_ok=bool(ok))
+
+
+@bp.route("/board/api/boards/<bid>/record_consent", methods=["POST"])
+@login_required
+def record_consent(uid, bid):
+    """録音を始める前の確認：今いる参加者みんなに伝えて同意をもらった・全員18歳以上"""
+    d = request.get_json(silent=True) or {}
+    if not (d.get("told") is True and d.get("agreed") is True and d.get("adult") is True):
+        return jsonify(ok=False, error="3つとも確かめてから録音を始めてください"), 400
+    try:
+        n = int(d.get("n_people"))
+    except (TypeError, ValueError):
+        n = 0
+    if not 1 <= n <= 50:
+        return jsonify(ok=False, error="参加している人数を入れてください"), 400
+    with _db() as c:
+        b, _ = _can(c, bid, uid)
+        if not b:
+            return jsonify(ok=False, error="ボードが見つかりません"), 404
+        cid = _record_consent(c, "record", uid, board=bid, n_people=n,
+                              detail={"told": True, "agreed": True, "adult": True})
+    return jsonify(ok=True, consent_id=cid)
 
 
 @bp.route("/board/api/boards/<bid>/save", methods=["POST"])
@@ -476,6 +574,15 @@ def chunk(uid, bid):
         dur = min(MAX_CHUNK_SEC, max(0.0, float(request.form.get("dur", 60))))
     except ValueError:
         dur = 60.0
+    try:
+        cons = int(request.form.get("consent_id", "0"))
+    except ValueError:
+        cons = 0
+    with _db() as c:
+        cr = c.execute("SELECT at_ts FROM consents WHERE id=? AND kind='record' AND user=? AND board=?",
+                       (cons, uid, bid)).fetchone()
+    if not cr or time.time() - cr["at_ts"] > CONSENT_MAX_AGE:
+        return jsonify(ok=False, need_consent=True, error="録音の前の確認がまだです。もう一度「録音を始める」から確かめてください"), 403
     mine, allu = _used(uid)
     if mine + dur > CFG["daily"] + 30 or allu + dur > CFG["global_daily"] + 30:
         return jsonify(ok=False, limit=True, error="今日の録音の上限に達しました。明日また使えます"), 429
@@ -525,3 +632,33 @@ def chunk(uid, bid):
             os.remove(path)   # 音声は残さない
         except OSError:
             pass
+
+
+# ---------------- 研究用の書き出し ----------------
+def _admin_ok():
+    u, p = os.getenv("ADMIN_USERNAME", ""), os.getenv("ADMIN_PASSWORD", "")
+    a = request.authorization
+    return bool(p) and a is not None and secrets.compare_digest((a.username or "").encode(), u.encode()) \
+        and secrets.compare_digest((a.password or "").encode(), p.encode())
+
+
+@bp.route("/board/admin/export")
+def export():
+    """研究に使ってよいボード（持ち主が外していない・録音前の確認の記録がある）だけを JSON で書き出す。
+    人は番号（user id）だけで表し、ID名・パスワードは出さない"""
+    if not _admin_ok():
+        return ("Authentication required", 401, {"WWW-Authenticate": 'Basic realm="GraRec Board Export"'})
+    with _db() as c:
+        boards = c.execute("SELECT * FROM boards WHERE research_ok=1 AND id IN "
+                           "(SELECT board FROM consents WHERE kind='record')").fetchall()
+        out = []
+        for b in boards:
+            cons = [dict(r) for r in c.execute("SELECT kind, user, ver, at, n_people FROM consents WHERE board=? ORDER BY id", (b["id"],))]
+            members = [r[0] for r in c.execute("SELECT user FROM members WHERE board=?", (b["id"],))]
+            out.append({"board": b["id"], "owner": b["owner"], "members": members, "title": b["title"],
+                        "agenda": json.loads(b["agenda"] or "[]"), "created": b["created"], "updated": b["updated"],
+                        "rec_sec": b["rec_sec"], "utts": json.loads(b["utts"] or "[]"), "ai": json.loads(b["ai"] or "{}"),
+                        "state": json.loads(b["state"] or "{}"), "consents": cons})
+    r = jsonify(exported=_now(), consent_ver=CONSENT_VER, boards=out)
+    r.headers["Content-Disposition"] = "attachment; filename=grarec_board_export.json"
+    return r

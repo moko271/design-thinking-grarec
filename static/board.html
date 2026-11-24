@@ -83,9 +83,17 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
 #status.err{color:var(--danger)}
 #editor{position:absolute;z-index:20;font-size:12px;padding:8px;border:2px solid var(--ai);resize:none;background:var(--paper);color:var(--ink)}
 .zoom{position:absolute;right:10px;bottom:10px;display:flex;gap:4px;z-index:5}
+.consentBox{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px 12px;margin:4px 0 10px;background:var(--bg)}
+.consent{font-size:12px;line-height:1.7}.consent h3{font-size:14px;margin:8px 0 4px}.consent h3 small{font-weight:400;color:var(--sub)}
+.consent h4{font-size:12px;margin:10px 0 2px}.consent ul{margin:0;padding-left:18px}.consent p{margin:6px 0}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:6px 0;line-height:1.5}.chk input{margin-top:3px}
+.modal{position:fixed;inset:0;z-index:50;background:rgba(10,14,20,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+.modal .box{width:520px;max-width:100%;max-height:calc(100% - 32px);overflow:auto}
+.modal ul.say{margin:4px 0 10px;padding-left:20px;font-size:13px;line-height:1.7}
+#researchRow{font-size:12px;line-height:1.6}
 #sharePop{position:absolute;right:16px;top:52px;z-index:30;width:340px;max-width:calc(100vw - 32px);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:12px;box-shadow:0 4px 16px rgba(0,0,0,.18);font-size:12px;line-height:1.6}
 #sharePop input{font-size:12px;margin:6px 0}
-@media (max-width:760px){.main{flex-direction:column}.side{width:auto;height:38%;border-left:none;border-top:1px solid var(--line)}#title{width:150px}}
+@media (max-width:760px){.main{flex-direction:column}.side{width:auto;height:38%;border-left:none;border-top:1px solid var(--line);overflow:auto}.side section{flex:none!important}#talk{max-height:160px}#title{width:150px}.top{padding-block:6px}}
 @media (prefers-reduced-motion:reduce){.sticky.proposal{animation:none}.dot{animation:none}}
 </style></head><body>
 
@@ -99,15 +107,65 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
       <div class="field" id="codeField" hidden><label for="code">招待コード（もこから聞いたもの）</label><input type="text" id="code" autocomplete="off"></div>
       <div class="field"><label for="uname">ID</label><input type="text" id="uname" autocomplete="username" maxlength="20"></div>
       <div class="field"><label for="pw">パスワード（6文字以上）</label><input type="password" id="pw" autocomplete="current-password" maxlength="100"></div>
+      <div id="signupConsent" hidden><div class="consentBox"></div>
+      <label class="chk"><input type="checkbox" id="suAgree"> 上の説明を読み、研究データとして使われることに同意します</label>
+      <label class="chk"><input type="checkbox" id="suAdult"> 18歳以上です</label></div>
       <button type="submit" class="primary" id="authBtn">ログイン</button>
       <p class="msg" id="authMsg"></p>
     </form>
   </div>
-  <div class="note"><b>録音について</b><br>
-    話し合いの音声は、文字起こしのために OpenAI に送ります（APIに送ったデータはAIの学習には使われませんが、OpenAI の方針で最大30日ほど保管されることがあります）。
-    音声そのものはこのサーバーには残しません。文字起こしと付箋はボードに保存され、ボードを消すと消えます。<br>
-    録音を始める前に、参加する人みんなに伝えて、いいか聞いてください。</div>
+  <div class="note"><b>研究のためのボードです</b><br>
+    文字起こしと付箋は、東京都市大学の研究データとして使います。登録するときに説明を読んで同意してもらいます。
+    録音するときは、毎回その場の参加者みんなに伝えて同意をもらってから始めます。音声そのものはこのサーバーには残しません。</div>
 </div></div>
+
+<!-- 説明の版が変わったときの同意 -->
+<div id="consentView" class="view" hidden><div class="page">
+  <h1>研究への協力の説明が新しくなりました</h1>
+  <p class="lead">続けて使うには、もう一度読んで同意してください。</p>
+  <div class="box"><div class="consentBox"></div>
+      <label class="chk"><input type="checkbox" id="cvAgree"> 上の説明を読み、研究データとして使われることに同意します</label>
+      <label class="chk"><input type="checkbox" id="cvAdult"> 18歳以上です</label>
+    <button type="button" class="primary" id="cvBtn">同意して続ける</button> <button type="button" id="cvLogout">同意しないでログアウト</button>
+    <p class="msg" id="cvMsg"></p></div>
+</div></div>
+
+<!-- 録音の前の確認 -->
+<div id="recModal" class="modal" hidden><div class="box" role="dialog" aria-modal="true" aria-labelledby="recModalTitle">
+  <h2 id="recModalTitle">録音の前に</h2>
+  <p style="font-size:13px;margin:0">今ここにいる参加者みんなに、次のことを伝えて同意をもらってください。</p>
+  <ul class="say"><li>話し合いを録音して、AIで文字起こしすること（音声は残さない）</li>
+    <li>文字起こしと付箋を、東京都市大学の研究データとして使うこと（名前は伏せる）</li>
+    <li>いやならことわってよく、あとからでも取り消せること</li></ul>
+  <button type="button" id="showConsent">参加者に見せる説明を開く</button>
+  <div id="recConsent" class="consentBox" hidden></div>
+  <label class="chk"><input type="checkbox" id="rcTold"> 参加者みんなに上のことを伝えた</label>
+  <label class="chk"><input type="checkbox" id="rcAgreed"> 全員がいいと言った（ひとりでもいやな人がいたら録音しない）</label>
+  <label class="chk"><input type="checkbox" id="rcAdult"> 参加者は全員18歳以上</label>
+  <div class="field" style="max-width:180px"><label for="rcN">参加している人数（自分も入れて）</label><input type="text" inputmode="numeric" id="rcN" maxlength="2"></div>
+  <button type="button" class="primary" id="rcStart">確かめたので録音を始める</button> <button type="button" id="rcCancel">やめる</button>
+  <p class="msg" id="rcMsg"></p>
+</div></div>
+<template id="consentTpl"><div class="consent">
+  <h3>研究への協力のお願い <small>（説明の版：<span class="cver"></span>）</small></h3>
+  <p>このボードは、東京都市大学の研究「グループでの話し合いを可視化し、ファシリテーションを支える仕組みづくり」のために公開しています。使うと、次のデータを研究に使わせてもらいます。</p>
+  <h4>集めるもの</h4><ul>
+    <li>話し合いの文字起こし（音声から自動で作ったもの）</li>
+    <li>AIが書いた付箋と人が書いた付箋、その採用・却下・移動・編集の結果</li>
+    <li>ボードを使った日時、録音した長さ、参加した人数</li>
+    <li>音声そのものは保存しません。ログイン用のID以外に、名前やメールなどの個人情報は集めません</li></ul>
+  <h4>使い方</h4><ul>
+    <li>付箋の出し方や置き方を分析して、卒業論文・修士論文・学会発表などに使います</li>
+    <li>発表するときは、名前や、だれのことかわかる内容を伏せます（「話者A」のような記号にします）</li>
+    <li>データは研究者だけが扱い、研究のほかには使いません</li></ul>
+  <h4>外部のサービス</h4><ul>
+    <li>文字起こしと付箋づくりに OpenAI のAPIを使います。送ったデータはAIの学習には使われませんが、OpenAI の方針で最大30日ほど保管されることがあります</li></ul>
+  <h4>参加は自由です</h4><ul>
+    <li>同意しなくても不利益はありません（このボードは研究のために公開しているので、使うには同意が必要です）</li>
+    <li>あとから取り消せます。ボードを消すか、ボードの「研究データとして使う」を外すと、それ以降は研究に使いません。すでに発表したものからは取り除けないことがあります</li></ul>
+  <p>問い合わせ：<span class="contact"></span></p>
+</div></template>
+
 
 <!-- ボード一覧 -->
 <div id="listView" class="view" hidden><div class="page">
@@ -144,6 +202,7 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
       <div class="zoom"><button type="button" id="zin" aria-label="拡大">＋</button><button type="button" id="zout" aria-label="縮小">−</button><button type="button" id="zfit">全体</button></div></div>
     <div class="side">
       <section><div id="status"></div></section>
+      <section id="researchRow"></section>
       <section style="flex:1;display:flex;flex-direction:column;min-height:0"><h3>会話（文字起こし）</h3><div id="talk"></div></section>
       <section><h3>却下した付箋 <span id="trayN"></span></h3><div id="tray"></div></section>
       <section><h3>使い方</h3><ul class="help">
@@ -170,16 +229,24 @@ async function api(path,opt={}){
   catch(e){return {ok:false,error:'サーバーに届きませんでした。ネットの接続を確かめてください',net:true};}
   try{j=await r.json();}catch(e){j={ok:false,error:'サーバーの応答が読めませんでした（'+r.status+'）'};}
   if(r.status===401&&j.login){stopRec(true);showAuth();}
+  if(r.status===403&&j.consent){stopRec(true);showConsentView();}
   return j;
 }
-function show(v){['authView','listView','boardView'].forEach(x=>$(x).hidden=x!==v);}
+function show(v){['authView','listView','boardView','consentView'].forEach(x=>$(x).hidden=x!==v);}
+let META={consent_ver:'',contact:''};
+function fillConsent(box){box.innerHTML='';const n=$('consentTpl').content.cloneNode(true);n.querySelector('.cver').textContent=META.consent_ver;n.querySelector('.contact').textContent=META.contact;box.appendChild(n);}
+function showConsentView(){show('consentView');fillConsent(document.querySelector('#consentView .consentBox'));}
+$('cvBtn').onclick=async()=>{const j=await api('/consent',{method:'POST',body:{agree:$('cvAgree').checked,adult:$('cvAdult').checked,consent_ver:META.consent_ver}});
+  if(!j.ok){$('cvMsg').textContent=j.error;return;}route();};
+$('cvLogout').onclick=async()=>{await api('/logout',{method:'POST'});showAuth();};
 
 // ---------- ログイン ----------
 let signupMode=false;
-function setMode(s){signupMode=s;$('tabLogin').classList.toggle('on',!s);$('tabSignup').classList.toggle('on',s);$('codeField').hidden=!s;$('authBtn').textContent=s?'登録してはじめる':'ログイン';$('pw').autocomplete=s?'new-password':'current-password';$('authMsg').textContent='';}
+function setMode(s){signupMode=s;$('tabLogin').classList.toggle('on',!s);$('tabSignup').classList.toggle('on',s);$('codeField').hidden=!s;$('signupConsent').hidden=!s;if(s)fillConsent(document.querySelector('#signupConsent .consentBox'));$('authBtn').textContent=s?'登録してはじめる':'ログイン';$('pw').autocomplete=s?'new-password':'current-password';$('authMsg').textContent='';}
 $('tabLogin').onclick=()=>setMode(false);$('tabSignup').onclick=()=>setMode(true);
 $('authForm').onsubmit=async e=>{e.preventDefault();$('authBtn').disabled=true;$('authMsg').textContent='';
-  const body={username:$('uname').value.trim(),password:$('pw').value,code:$('code').value.trim()};
+  const body={username:$('uname').value.trim(),password:$('pw').value,code:$('code').value.trim(),agree:$('suAgree').checked,adult:$('suAdult').checked,consent_ver:META.consent_ver};
+  if(signupMode&&!(body.agree&&body.adult)){$('authBtn').disabled=false;$('authMsg').textContent='説明への同意と、18歳以上であることの確認が必要です';return;}
   const j=await api(signupMode?'/signup':'/login',{method:'POST',body});$('authBtn').disabled=false;
   if(!j.ok){$('authMsg').textContent=j.error||'うまくいきませんでした';return;}
   $('pw').value='';route();};
@@ -217,11 +284,17 @@ async function openBoard(id){
   const j=await api('/boards/'+id);if(!j.ok){status(j.error||'開けませんでした',true);setTimeout(()=>{location.hash='';},1500);return;}
   B={id:j.id,title:j.title,agenda:j.agenda||[],ver:j.ver,utts:j.utts||[],rec:j.rec_sec,owner:j.owner,join:j.join_token};
   S=Object.assign({objs:{},links:[],tray:[],bands:[]},j.state||{});
-  $('title').value=B.title;$('shareBtn').hidden=!B.owner;
+  $('title').value=B.title;$('shareBtn').hidden=!B.owner;B.research=j.research_ok;renderResearch();rec.consentId=null;
   if(B.agenda.length&&!S.bands.length){B.agenda.forEach(n=>bandOf(n));save();}
   render();fit();status(B.utts.length?'':'「録音を始める」を押すと、AIが付箋を書きはじめます');
   clearInterval(pollTimer);pollTimer=setInterval(poll,3000);
 }
+function renderResearch(){const r=$('researchRow');r.innerHTML='';
+  if(B.owner){const l=document.createElement('label');l.className='chk';const c=document.createElement('input');c.type='checkbox';c.checked=B.research;
+    c.onchange=async()=>{const j=await api('/boards/'+B.id+'/research',{method:'POST',body:{ok:c.checked}});if(j.ok)B.research=j.research_ok;else c.checked=B.research;renderResearch();};
+    l.append(c,document.createTextNode('このボードを研究データとして使う'));r.appendChild(l);
+    const n=document.createElement('div');n.style.color='var(--sub)';n.textContent=B.research?'参加者から取り消したいと言われたら、外すかボードを消してください':'研究には使いません（録音と付箋づくりはこのまま使えます）';r.appendChild(n);}
+  else r.textContent='研究データとして使う：'+(B.research?'はい':'いいえ')+'（変えられるのはボードの持ち主）';}
 function leaveBoard(){clearInterval(pollTimer);pollTimer=null;B=null;S=null;}
 async function poll(){
   if(!B||saving||dirty.size||gone.size||editing||drag||document.hidden)return;
@@ -359,21 +432,31 @@ function recInfo(){const s=rec.on?Math.floor((Date.now()-rec.started)/1000):0;
   if(rec.pending)$('recInfo').append(document.createTextNode((rec.on?' ・ ':'')+'AIが考え中…'));}
 async function upload(blob,dur){
   const bid=B&&B.id;if(!bid)return;
-  const ext=/mp4/.test(blob.type)?'.mp4':/ogg/.test(blob.type)?'.ogg':'.webm';const fd=new FormData();fd.append('audio',blob,'chunk'+ext);fd.append('dur',String(Math.round(dur)));
+  const ext=/mp4/.test(blob.type)?'.mp4':/ogg/.test(blob.type)?'.ogg':'.webm';const fd=new FormData();fd.append('audio',blob,'chunk'+ext);fd.append('dur',String(Math.round(dur)));fd.append('consent_id',String(rec.consentId||''));
   const j=await api('/boards/'+bid+'/chunk',{method:'POST',body:fd});
   if(!B||B.id!==bid)return;
-  if(!j.ok){status(j.error||'文字起こしに失敗しました',true);if(j.limit)stopRec(true);return;}
+  if(!j.ok){status(j.error||'文字起こしに失敗しました',true);if(j.limit||j.need_consent)stopRec(true);return;}
   B.utts.push(...(j.utts||[]));if(j.rec_sec)B.rec=j.rec_sec;
   (j.cards||[]).forEach(placeAI);render();if(j.cards&&j.cards.length)save();
   status((j.cards&&j.cards.length?`付箋が${j.cards.length}枚増えました`:'この1分は付箋なし')+(j.usage?`（今日の残り録音 ${j.usage.left_min}分）`:'')+(rec.on?'':' ・ 録音は止まっています'));
 }
-$('recBtn').onclick=()=>rec.on?stopRec():startRec();
+function openRecModal(){['rcTold','rcAgreed','rcAdult'].forEach(i=>$(i).checked=false);$('rcN').value='';$('rcMsg').textContent='';$('recConsent').hidden=true;$('recModal').hidden=false;$('rcTold').focus();}
+$('showConsent').onclick=()=>{const b=$('recConsent');if(b.hidden)fillConsent(b);b.hidden=!b.hidden;};
+$('rcCancel').onclick=()=>$('recModal').hidden=true;
+$('rcStart').onclick=async()=>{const n=parseInt($('rcN').value.replace(/[０-９]/g,d=>String.fromCharCode(d.charCodeAt(0)-0xFEE0)),10);
+  if(!($('rcTold').checked&&$('rcAgreed').checked&&$('rcAdult').checked)){$('rcMsg').textContent='3つとも確かめてから始めてください';return;}
+  if(!(n>=1&&n<=50)){$('rcMsg').textContent='参加している人数を数字で入れてください';return;}
+  $('rcStart').disabled=true;const j=await api('/boards/'+B.id+'/record_consent',{method:'POST',body:{told:true,agreed:true,adult:true,n_people:n}});$('rcStart').disabled=false;
+  if(!j.ok){$('rcMsg').textContent=j.error;return;}rec.consentId=j.consent_id;$('recModal').hidden=true;startRec();};
+$('recBtn').onclick=()=>rec.on?stopRec():openRecModal();
 window.addEventListener('beforeunload',e=>{if(rec.on||dirty.size||gone.size){flush();e.preventDefault();e.returnValue='';}});
 
 // ---------- 画面の切り替え ----------
 async function route(){
   const m=await api('/me');if(!m.ok&&m.net){show('authView');$('authMsg').textContent=m.error;return;}
+  META.consent_ver=m.consent_ver||'';META.contact=m.contact||'';
   if(!m.user){showAuth();return;}
+  if(m.consent_needed){showConsentView();return;}
   $('whoLabel').textContent=m.user+' でログイン中';
   const h=location.hash.slice(1);
   if(h.startsWith('join=')){const [id,token]=h.slice(5).split('~');const j=await api('/join',{method:'POST',body:{id,token}});
