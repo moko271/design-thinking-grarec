@@ -72,7 +72,9 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
 .side{width:320px;border-left:1px solid var(--line);background:var(--paper);display:flex;flex-direction:column;min-height:0}
 .side section{padding:10px 12px;border-bottom:1px solid var(--line)}
 .side h3{font-size:13px;margin:0 0 6px}
-#talk{flex:1;overflow:auto;font-size:12px;line-height:1.55}
+#talkSec.open{flex:1;display:flex;flex-direction:column;min-height:0}
+#talkBtn{width:100%;text-align:left}
+#talk{flex:1;overflow:auto;font-size:12px;line-height:1.55;margin-top:8px}
 #talk p{margin:0 0 6px}
 #talk .tm{color:var(--sub);margin-right:4px;font-variant-numeric:tabular-nums}
 #tray{max-height:140px;overflow:auto;font-size:12px}
@@ -203,7 +205,7 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
     <div class="side">
       <section><div id="status"></div></section>
       <section id="researchRow"></section>
-      <section style="flex:1;display:flex;flex-direction:column;min-height:0"><h3>会話（文字起こし）</h3><div id="talk"></div></section>
+      <section id="talkSec"><button type="button" id="talkBtn" aria-expanded="false" aria-controls="talk">会話（文字起こし）を開く</button><div id="talk" hidden></div></section>
       <section><h3>却下した付箋 <span id="trayN"></span></h3><div id="tray"></div></section>
       <section><h3>使い方</h3><ul class="help">
         <li>「録音を始める」で、1分ごとにAIが付箋を書いて置きます（最初の付箋は1分ちょっと後）</li>
@@ -217,7 +219,7 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
-const SW=130,SH=100,CW=152,CH=142,MAXR=3,BANDH=(MAXR+1)*CH+70,Y0=60;
+const SW=130,SH=100,CW=152,CH=142,MAXR=3,GAP=40,Y0=60;
 const SEG_MS=Math.min(120,Math.max(20,+new URLSearchParams(location.search).get('seg')||60))*1000;
 const QT=['問い','見出し','枠・見出し','問いを残す'];
 const fmt=t=>Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0');
@@ -318,7 +320,7 @@ async function flush(extra){
 // 話題ごとの横の帯。問い・見出しは帯の上の行に右へ並べ、答えはいちばん新しい問いの下に3枚まで積み、あふれたら右へ
 function bandOf(name){let i=S.bands.findIndex(b=>b.name===name);
   if(i<0){S.bands.push({name,qcol:null,nextCol:1});i=S.bands.length-1;const hid='band'+i;
-    S.objs[hid]={id:hid,type:'sticky',header:true,x:0,y:Y0+i*BANDH,text:name,color:'pink',q:true};dirty.add(hid);}
+    S.objs[hid]={id:hid,type:'sticky',header:true,band:name,x:0,y:0,text:name,color:'pink',q:true};dirty.add(hid);}
   return i;}
 function placeAI(card){
   const i=bandOf(card.band||'その他'),b=S.bands[i];
@@ -329,14 +331,20 @@ function placeAI(card){
   else if(b.qcol!==null){c=b.qcol;r=1;while(occ(c,r)&&r<=MAXR)r++;if(r>MAXR){c=b.qcol+1;r=1;while(occ(c,r)){r++;if(r>MAXR){c++;r=1;}}}}
   else{c=b.nextCol;r=0;while(occ(c,r))c++;}
   b.nextCol=Math.max(b.nextCol,c+1);
-  S.objs[card.id]={id:card.id,type:'sticky',ai:true,band:b.name,c,r,x:c*CW,y:Y0+i*BANDH+r*CH,text:card.text,color:'yellow',
+  S.objs[card.id]={id:card.id,type:'sticky',ai:true,band:b.name,c,r,x:c*CW,y:0,text:card.text,color:'yellow',
     q:QT.includes(card.trig),status:$('autoAdopt').checked?'adopted':'proposal',time:card.time};
   dirty.add(card.id);
   if(card.rel==='arrow'&&par)S.links.push({from:card.parent,to:card.id});
 }
 
 function apply(){world.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.k})`;}
-function render(){if(!S)return;
+// 帯の高さは、その帯で使っている行の数だけ。前の帯がのびたら、後ろの帯を下へずらす（手で動かした付箋はそのまま）
+function relayout(){if(!S||!S.bands)return;let y=Y0;const os=Object.values(S.objs);
+  S.bands.forEach((b,i)=>{let maxR=0;os.forEach(o=>{if(o.ai&&o.band===b.name&&o.r!=null)maxR=Math.max(maxR,o.r);});
+    const h=S.objs['band'+i];if(h&&!h.moved){h.x=0;h.y=y;}
+    os.forEach(o=>{if(o.ai&&o.band===b.name&&!o.moved&&o.c!=null){o.x=o.c*CW;o.y=y+o.r*CH;}});
+    y+=(maxR+1)*CH+GAP;});}
+function render(){if(!S)return;relayout();
   world.querySelectorAll('.obj').forEach(e=>e.remove());
   Object.values(S.objs).forEach(o=>{const e=document.createElement('div');e.className='obj '+o.type+(o.color?' '+o.color:'')+(o.q?' q':'')+(o.status==='proposal'?' proposal':'')+(sel===o.id?' sel':'');
     e.style.left=o.x+'px';e.style.top=o.y+'px';e.dataset.id=o.id;e.textContent=o.text||'';
@@ -359,7 +367,10 @@ function renderTray(){$('trayN').textContent=S.tray.length?`（${S.tray.length}�
     b.onclick=()=>{S.tray=S.tray.filter(x=>x.id!==o.id);o.status='adopted';S.objs[o.id]=o;render();touch(o.id);};d.append(s,b);t.appendChild(d);});
   if(!S.tray.length)t.innerHTML='<span style="color:var(--sub)">まだありません</span>';}
 let lastTalk=-1;
-function renderTalk(){const u=B.utts;if(u.length===lastTalk)return;lastTalk=u.length;const box=$('talk');box.innerHTML='';
+function setTalk(open){$('talk').hidden=!open;$('talkSec').classList.toggle('open',open);$('talkBtn').setAttribute('aria-expanded',open);
+  $('talkBtn').textContent=open?'会話（文字起こし）を閉じる':'会話（文字起こし）を開く';store.set('talkOpen',open?'1':'0');if(open){lastTalk=-1;if(B)renderTalk();}}
+$('talkBtn').onclick=()=>setTalk($('talk').hidden);
+function renderTalk(){if($('talk').hidden)return;const u=B.utts;if(u.length===lastTalk)return;lastTalk=u.length;const box=$('talk');box.innerHTML='';
   if(!u.length){box.innerHTML='<p style="color:var(--sub)">録音を始めると、ここに文字起こしが出ます。</p>';return;}
   u.slice(-40).forEach(x=>{const p=document.createElement('p');const tm=document.createElement('span');tm.className='tm';tm.textContent=fmt(x.t);p.append(tm,document.createTextNode(x.text));box.appendChild(p);});
   box.scrollTop=box.scrollHeight;}
@@ -384,7 +395,7 @@ stage.addEventListener('pointerdown',ev=>{if(ev.target.id==='editor')return;cons
 stage.addEventListener('pointermove',ev=>{if(!drag)return;const dx=ev.clientX-drag.sx,dy=ev.clientY-drag.sy;
   if(drag.pan){view.x=drag.vx+dx;view.y=drag.vy+dy;apply();return;}
   if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;const o=S.objs[drag.id];if(!o)return;o.x=drag.ox+dx/view.k;o.y=drag.oy+dy/view.k;drag.el.style.left=o.x+'px';drag.el.style.top=o.y+'px';drawLinks();});
-const endDrag=()=>{stage.classList.remove('panning');if(drag&&drag.id&&drag.moved&&S.objs[drag.id]){const o=S.objs[drag.id];if(o.status==='proposal'){o.status='adopted';render();}touch(drag.id);}drag=null;};
+const endDrag=()=>{stage.classList.remove('panning');if(drag&&drag.id&&drag.moved&&S.objs[drag.id]){const o=S.objs[drag.id];o.moved=true;if(o.status==='proposal'){o.status='adopted';render();}touch(drag.id);}drag=null;};
 stage.addEventListener('pointerup',endDrag);stage.addEventListener('pointercancel',endDrag);
 stage.addEventListener('dblclick',ev=>{const el=ev.target.closest('.obj');if(el)edit(el.dataset.id);});
 stage.addEventListener('wheel',ev=>{ev.preventDefault();if(ev.ctrlKey||ev.metaKey||Math.abs(ev.deltaY)>40&&!ev.shiftKey){zoomAt(ev.clientX,ev.clientY,ev.deltaY<0?1.1:1/1.1);}else{view.x-=ev.deltaX;view.y-=ev.deltaY;apply();}},{passive:false});
@@ -465,5 +476,6 @@ async function route(){
   if(rec.on)stopRec();leaveBoard();showList();
 }
 window.addEventListener('hashchange',route);
+setTalk(store.get('talkOpen')==='1');
 route();
 </script></body></html>
