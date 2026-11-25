@@ -59,6 +59,11 @@ input[type=text],input[type=password],textarea{width:100%;border:1px solid var(-
 .sticky.yellow{background:var(--yellow)}.sticky.pink{background:var(--pink)}.sticky.blue{background:var(--blue)}
 .sticky.q{font-weight:700}
 .obj.sel{outline:2px solid var(--ai);outline-offset:2px}
+#marquee{position:absolute;border:1.5px solid var(--ai);background:rgba(47,111,222,.08);pointer-events:none;z-index:15}
+#stage.panmode{cursor:grab}
+.zoom button.on{background:var(--ink);color:var(--onInk);border-color:var(--ink)}
+#talkRow{display:flex;gap:6px}#talkRow #talkBtn{flex:1}
+.side.wide{width:min(600px,55vw)}
 .sticky.proposal{opacity:.92;outline:2px dashed var(--ai);outline-offset:2px;animation:pop .5s}
 @keyframes pop{0%{transform:scale(.7)}100%{transform:scale(1)}}
 .badge{position:absolute;left:4px;bottom:3px;font-size:9px;font-weight:700;color:#2f6fde;letter-spacing:.05em}
@@ -215,16 +220,18 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
   </div>
   <div class="main">
     <div id="stage"><div id="world"><svg id="links"><defs><marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z"/></marker></defs></svg></div>
-      <div class="zoom"><button type="button" id="zin" aria-label="拡大">＋</button><button type="button" id="zout" aria-label="縮小">−</button><button type="button" id="zfit">全体</button></div></div>
+      <div class="zoom"><button type="button" id="panBtn" title="オンの間は、ドラッグでボードを動かす（オフのときはスペースを押しながらドラッグ）">✋ 移動</button><button type="button" id="zin" aria-label="拡大">＋</button><button type="button" id="zout" aria-label="縮小">−</button><button type="button" id="zfit">全体</button></div></div>
     <div class="side">
       <section><div id="status"></div></section>
       <section id="researchRow"></section>
-      <section id="talkSec"><button type="button" id="talkBtn" aria-expanded="false" aria-controls="talk">会話（文字起こし）を開く</button><div id="talk" hidden></div></section>
+      <section id="talkSec"><div id="talkRow"><button type="button" id="talkBtn" aria-expanded="false" aria-controls="talk">会話（文字起こし）を開く</button><button type="button" id="wideBtn" hidden>広げる</button></div><div id="talk" hidden></div></section>
       <section><h3>却下した付箋 <span id="trayN"></span></h3><div id="tray"></div></section>
       <section><h3>使い方</h3><ul class="help">
         <li>「録音を始める」で、1分ごとにAIが付箋を書いて置きます（最初の付箋は1分ちょっと後）</li>
         <li>青い点線はAIの候補。✓で採用、✕で却下。動かすと採用になります</li>
-        <li>ダブルクリックで文字を編集、Deleteで削除。背景をドラッグで移動、ホイールで拡大縮小</li>
+        <li>ダブルクリック（スマホはダブルタップ）で文字を入力。Deleteで削除</li>
+        <li>背景をドラッグで範囲選択（Shiftで追加、⌘/Ctrl+Aで全部）。選んだ付箋はまとめて動かせます</li>
+        <li>ボードを動かす：スペースを押しながらドラッグ、右下の「✋ 移動」、2本指スクロール。拡大縮小：ピンチ・ホイール・＋−</li>
         <li>録音するのは1台だけにして、ほかの人は「共有」のリンクから見てください</li>
         <li>「振り返り」で、時間を戻してその時点のボードと会話を見られます</li></ul></section>
     </div>
@@ -234,7 +241,7 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
-const SW=130,SH=100,CW=152,CH=142,MAXR=3,GAP=40,Y0=60;
+const SW=130,SH=100,CW=152,CH=142,STACK=5,GAP=40,Y0=60;
 const SEG_MS=Math.min(120,Math.max(20,+new URLSearchParams(location.search).get('seg')||60))*1000;
 const QT=['問い','見出し','枠・見出し','問いを残す'];
 const fmt=t=>Math.floor(t/60)+':'+String(Math.floor(t%60)).padStart(2,'0');
@@ -290,7 +297,7 @@ $('newForm').onsubmit=async e=>{e.preventDefault();
   if(j.ok){$('newTitle').value='';$('newAgenda').value='';location.hash='b='+j.id;}};
 
 // ---------- ボード ----------
-let B=null,S=null,sel=null,color='yellow',arrowFrom=null,arrowMode=false,view={x:30,y:30,k:0.75};
+let B=null,S=null,selSet=new Set(),color='yellow',arrowFrom=null,arrowMode=false,view={x:30,y:30,k:0.75};
 let dirty=new Set(),gone=new Set(),saving=false,saveTimer=null,pollTimer=null,editing=false,drag=null;
 const me='h'+Math.random().toString(36).slice(2,7);let seq=0;
 const world=$('world'),stage=$('stage'),svg=$('links');
@@ -344,13 +351,16 @@ function bandOf(name){let i=S.bands.findIndex(b=>b.name===name);
     S.objs[hid]={id:hid,type:'sticky',header:true,band:name,x:0,y:0,text:name,color:'pink',q:true};dirty.add(hid);logEv('band_add',hid,null,snap(S.objs[hid]));}
   return i;}
 function placeAI(card){
+  // 矢印でつながる付箋（理由・結果・次）は、つなぎ元と同じ行の右へ。縦に積む上限（5枚）に関係なく横に伸ばす
+  const par0=card.parent&&S.objs[card.parent];
+  if(card.rel==='arrow'&&par0&&par0.ai&&par0.c!=null&&par0.band)card.band=par0.band;
   const i=bandOf(card.band||'その他'),b=S.bands[i];
   const occ=(c,r)=>(c===0&&r===0)||Object.values(S.objs).some(o=>o.ai&&o.band===b.name&&o.c===c&&o.r===r);
   const par=card.parent&&S.objs[card.parent];let c,r;
   if(QT.includes(card.trig)){c=b.nextCol;r=0;while(occ(c,r))c++;b.qcol=c;}
   else if(card.rel==='arrow'&&par&&par.band===b.name&&par.c!=null){c=par.c+1;r=par.r;while(occ(c,r))c++;}
-  else if(b.qcol!==null){c=b.qcol;r=1;while(occ(c,r)&&r<=MAXR)r++;if(r>MAXR){c=b.qcol+1;r=1;while(occ(c,r)){r++;if(r>MAXR){c++;r=1;}}}}
-  else{c=b.nextCol;r=0;while(occ(c,r))c++;}
+  else if(b.qcol!==null){c=b.qcol;r=1;while(occ(c,r)&&r<=STACK)r++;if(r>STACK){c=b.qcol+1;r=1;while(occ(c,r)){r++;if(r>STACK){c++;r=1;}}}}   // 問いの下に5枚まで、あふれたら右の列へ
+  else{c=b.ansCol||1;r=0;while(occ(c,r)){r++;if(r>=STACK){c++;r=0;}}b.ansCol=c;}   // 問いがまだない帯：縦に5枚まで積んで右の列へ
   b.nextCol=Math.max(b.nextCol,c+1);
   S.objs[card.id]={id:card.id,type:'sticky',ai:true,band:b.name,c,r,x:c*CW,y:0,text:card.text,color:'yellow',
     q:QT.includes(card.trig),status:$('autoAdopt').checked?'adopted':'proposal',time:card.time};
@@ -367,7 +377,7 @@ function relayout(st){st=st||S;if(!st||!st.bands)return;let y=Y0;const os=Object
     y+=(maxR+1)*CH+GAP;});}
 function render(){if(!S)return;relayout();
   world.querySelectorAll('.obj').forEach(e=>e.remove());
-  Object.values(S.objs).forEach(o=>{const e=document.createElement('div');e.className='obj '+o.type+(o.color?' '+o.color:'')+(o.q?' q':'')+(o.status==='proposal'?' proposal':'')+(sel===o.id?' sel':'');
+  Object.values(S.objs).forEach(o=>{const e=document.createElement('div');e.className='obj '+o.type+(o.color?' '+o.color:'')+(o.q?' q':'')+(o.status==='proposal'?' proposal':'')+(selSet.has(o.id)?' sel':'');
     e.style.left=o.x+'px';e.style.top=o.y+'px';e.dataset.id=o.id;e.textContent=o.text||'';
     if(o.type==='sticky'){if(o.ai){const b=document.createElement('span');b.className='badge';b.textContent=o.status==='proposal'?'AI 候補':'AI';e.appendChild(b);}
       if(o.time){const tm=document.createElement('span');tm.className='time';tm.textContent=o.time;e.appendChild(tm);}
@@ -388,53 +398,107 @@ function renderTray(){$('trayN').textContent=S.tray.length?`（${S.tray.length}�
     b.onclick=()=>{if(RP)return;S.tray=S.tray.filter(x=>x.id!==o.id);o.status='adopted';S.objs[o.id]=o;render();touch(o.id);logEv('restore',o.id,null,snap(o));};d.append(s,b);t.appendChild(d);});
   if(!S.tray.length)t.innerHTML='<span style="color:var(--sub)">まだありません</span>';}
 let lastTalk=-1;
-function setTalk(open){$('talk').hidden=!open;$('talkSec').classList.toggle('open',open);$('talkBtn').setAttribute('aria-expanded',open);
+$('wideBtn').onclick=()=>{const w=!document.querySelector('.side').classList.contains('wide');document.querySelector('.side').classList.toggle('wide',w);$('wideBtn').textContent=w?'もとに戻す':'広げる';};
+function setTalk(open){$('talk').hidden=!open;$('wideBtn').hidden=!open;if(!open){document.querySelector('.side').classList.remove('wide');$('wideBtn').textContent='広げる';}$('talkSec').classList.toggle('open',open);$('talkBtn').setAttribute('aria-expanded',open);
   $('talkBtn').textContent=open?'会話（文字起こし）を閉じる':'会話（文字起こし）を開く';store.set('talkOpen',open?'1':'0');if(open){lastTalk=-1;if(B)renderTalk();}}
 $('talkBtn').onclick=()=>setTalk($('talk').hidden);
-function renderTalk(){if($('talk').hidden)return;const u=RP?B.utts.filter(x=>x.ms&&x.ms<=RP.T):B.utts;const key=RP?-1-u.length:u.length;if(key===lastTalk)return;lastTalk=key;const box=$('talk');box.innerHTML='';
+function renderTalk(){if($('talk').hidden)return;const u=RP?B.utts.filter(x=>x.ms&&x.ms<=RP.T):B.utts;const key=RP?-1-u.length:u.length;if(key===lastTalk)return;lastTalk=key;const box=$('talk');const keepTop=box.scrollTop;box.innerHTML='';box.scrollTop=keepTop;
   if(!u.length){box.innerHTML='<p style="color:var(--sub)">録音を始めると、ここに文字起こしが出ます。</p>';return;}
-  u.slice(-40).forEach(x=>{const p=document.createElement('p');const tm=document.createElement('span');tm.className='tm';tm.textContent=fmt(x.t);p.append(tm,document.createTextNode(x.text));box.appendChild(p);});
-  box.scrollTop=box.scrollHeight;}
+  const atEnd=box.dataset.n===undefined||box.scrollHeight-box.scrollTop-box.clientHeight<60;
+  u.forEach(x=>{const p=document.createElement('p');const tm=document.createElement('span');tm.className='tm';tm.textContent=fmt(x.t);p.append(tm,document.createTextNode(x.text));box.appendChild(p);});
+  box.dataset.n=u.length;if(atEnd||RP)box.scrollTop=box.scrollHeight;}
 function status(t,err){$('status').textContent=t||'';$('status').classList.toggle('err',!!err);}
 
 // ---------- 操作 ----------
 function adopt(id){if(RP)return;const o=S.objs[id];if(o){o.status='adopted';render();touch(id);logEv('adopt',id,{status:'proposal'},{status:'adopted'});}}
-function reject(id){if(RP)return;const o=S.objs[id];if(!o)return;const b=snap(o);o.status='rejected';S.tray.push(o);if(sel===id)sel=null;render();drop(id);logEv('reject',id,b,null);}
+function reject(id){if(RP)return;const o=S.objs[id];if(!o)return;const b=snap(o);o.status='rejected';S.tray.push(o);selSet.delete(id);render();drop(id);logEv('reject',id,b,null);}
 function toWorld(sx,sy){return {x:(sx-view.x)/view.k,y:(sy-view.y)/view.k};}
 function addObj(type){const c=toWorld(stage.clientWidth/2,stage.clientHeight/2);const id=me+'_'+(seq++);
-  S.objs[id]=type==='sticky'?{id,type,x:c.x-65,y:c.y-50,text:'',color,ai:false}:{id,type,x:c.x,y:c.y,text:'テキスト'};sel=id;render();touch(id);logEv('add',id,null,snap(S.objs[id]));edit(id);}
+  S.objs[id]=type==='sticky'?{id,type,x:c.x-65,y:c.y-50,text:'',color,ai:false}:{id,type,x:c.x,y:c.y,text:'テキスト'};selSet=new Set([id]);render();touch(id);logEv('add',id,null,snap(S.objs[id]));edit(id);}
 function edit(id){if(RP||editing)return;const o=S.objs[id];if(!o)return;const before={text:o.text||'',status:o.status};const e=world.querySelector(`[data-id="${CSS.escape(id)}"]`);if(!e)return;const r=e.getBoundingClientRect(),sr=stage.getBoundingClientRect();
   const ta=document.createElement('textarea');ta.id='editor';ta.value=o.text||'';ta.maxLength=200;Object.assign(ta.style,{left:(r.left-sr.left)+'px',top:(r.top-sr.top)+'px',width:Math.max(140,r.width)+'px',height:Math.max(60,r.height)+'px'});
   editing=true;stage.appendChild(ta);ta.focus();requestAnimationFrame(()=>{if(document.activeElement!==ta&&ta.isConnected){ta.focus();}const n=ta.value.length;ta.setSelectionRange(n,n);});
   const done=()=>{editing=false;if(S.objs[id]&&ta.value!==before.text){o.text=ta.value;if(o.status==='proposal')o.status='adopted';touch(id);logEv('edit',id,before,{text:o.text,status:o.status});}ta.remove();render();};
   ta.addEventListener('blur',done,{once:true});ta.addEventListener('keydown',ev=>{if(ev.key==='Escape')ta.blur();});}
-stage.addEventListener('pointerdown',ev=>{if(ev.target.id==='editor')return;const el=RP?null:ev.target.closest('.obj');stage.setPointerCapture(ev.pointerId);
-  if(el){const id=el.dataset.id,o=S.objs[id];
-    if(arrowMode){if(!arrowFrom){arrowFrom=id;sel=id;render();}else if(arrowFrom!==id){S.links.push({from:arrowFrom,to:id});logEv('link','',null,{from:arrowFrom,to:id});arrowFrom=null;arrowMode=false;$('arrowBtn').classList.remove('on');stage.classList.remove('arrowmode');render();save();}return;}
-    // ダブルクリック（スマホはダブルタップ）で文字を入力。ドラッグのために押さえこんでいるので、ここで2回目の押下を見分ける
+// ---- 選ぶ・動かす・ボードを動かす・拡大縮小 ----
+// マウス：背景をドラッグ＝範囲選択（Shiftで追加）／スペースを押しながら・✋オン・ホイールのボタンでドラッグ＝ボードを動かす
+// タッチ：1本指＝ボードを動かす／2本指＝ピンチで拡大縮小／付箋を押さえて動かす
+let lastTap={},spaceDown=false,panMode=false;const ptrs=new Map();let pinch=null;
+function setSel(ids){selSet=new Set(ids);world.querySelectorAll('.obj').forEach(e=>e.classList.toggle('sel',selSet.has(e.dataset.id)));}
+function startPan(ev){drag={pan:true,sx:ev.clientX,sy:ev.clientY,vx:view.x,vy:view.y};stage.classList.add('panning');}
+stage.addEventListener('pointerdown',ev=>{
+  if(ev.target.closest('#editor,.zoom,.acts,button'))return;
+  ptrs.set(ev.pointerId,{x:ev.clientX,y:ev.clientY,type:ev.pointerType});
+  if(ev.pointerType==='touch'&&ptrs.size===2){   // 2本指：ピンチ
+    const [p1,p2]=[...ptrs.values()];drag=null;$('marquee')&&$('marquee').remove();
+    pinch={d:Math.hypot(p1.x-p2.x,p1.y-p2.y),mx:(p1.x+p2.x)/2,my:(p1.y+p2.y)/2,v:{...view}};return;}
+  if(ptrs.size>2)return;
+  try{stage.setPointerCapture(ev.pointerId);}catch(e){}
+  const el=RP?null:ev.target.closest('.obj');
+  if(el&&!(spaceDown||panMode||ev.button===1)){const id=el.dataset.id,o=S.objs[id];if(!o)return;
+    if(arrowMode){if(!arrowFrom){arrowFrom=id;setSel([id]);}else if(arrowFrom!==id){S.links.push({from:arrowFrom,to:id});logEv('link','',null,{from:arrowFrom,to:id});arrowFrom=null;arrowMode=false;$('arrowBtn').classList.remove('on');stage.classList.remove('arrowmode');render();save();}return;}
+    // ダブルクリック（スマホはダブルタップ）で文字を入力
     const now=Date.now();if(lastTap.id===id&&now-lastTap.t<400&&Math.hypot(ev.clientX-lastTap.x,ev.clientY-lastTap.y)<12){ev.preventDefault();lastTap={};drag=null;edit(id);return;}
     lastTap={id,t:now,x:ev.clientX,y:ev.clientY};
-    sel=id;drag={id,sx:ev.clientX,sy:ev.clientY,ox:o.x,oy:o.y,el,moved:false};world.querySelectorAll('.sel').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');}
-  else{sel=null;world.querySelectorAll('.sel').forEach(x=>x.classList.remove('sel'));drag={pan:true,sx:ev.clientX,sy:ev.clientY,vx:view.x,vy:view.y};stage.classList.add('panning');}});
-stage.addEventListener('pointermove',ev=>{if(!drag)return;const dx=ev.clientX-drag.sx,dy=ev.clientY-drag.sy;
+    if(ev.shiftKey){const n=new Set(selSet);n.has(id)?n.delete(id):n.add(id);setSel(n);drag=null;return;}
+    if(!selSet.has(id))setSel([id]);
+    const starts={};selSet.forEach(i=>{const x=S.objs[i];if(x)starts[i]={x:x.x,y:x.y};});
+    drag={ids:Object.keys(starts),starts,sx:ev.clientX,sy:ev.clientY,moved:false};return;}
+  // 背景
+  if(RP||ev.pointerType!=='mouse'||spaceDown||panMode||ev.button===1){if(!ev.shiftKey&&!spaceDown&&!panMode&&ev.button!==1)setSel([]);startPan(ev);return;}
+  const r=stage.getBoundingClientRect();const m=document.createElement('div');m.id='marquee';stage.appendChild(m);
+  drag={box:true,x0:ev.clientX-r.left,y0:ev.clientY-r.top,add:ev.shiftKey?new Set(selSet):new Set(),m};
+  Object.assign(m.style,{left:drag.x0+'px',top:drag.y0+'px',width:'0px',height:'0px'});if(!ev.shiftKey)setSel([]);});
+stage.addEventListener('pointermove',ev=>{
+  if(ptrs.has(ev.pointerId))ptrs.set(ev.pointerId,{x:ev.clientX,y:ev.clientY,type:ev.pointerType});
+  if(pinch&&ptrs.size===2){const [p1,p2]=[...ptrs.values()];const d=Math.hypot(p1.x-p2.x,p1.y-p2.y),mx=(p1.x+p2.x)/2,my=(p1.y+p2.y)/2;
+    const r=stage.getBoundingClientRect();const k=Math.min(2.5,Math.max(0.15,pinch.v.k*d/Math.max(10,pinch.d)));
+    const wx=(pinch.mx-r.left-pinch.v.x)/pinch.v.k,wy=(pinch.my-r.top-pinch.v.y)/pinch.v.k;
+    view={k,x:mx-r.left-wx*k,y:my-r.top-wy*k};apply();return;}
+  if(!drag)return;const dx=ev.clientX-drag.sx,dy=ev.clientY-drag.sy;
   if(drag.pan){view.x=drag.vx+dx;view.y=drag.vy+dy;apply();return;}
-  if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;const o=S.objs[drag.id];if(!o)return;o.x=drag.ox+dx/view.k;o.y=drag.oy+dy/view.k;drag.el.style.left=o.x+'px';drag.el.style.top=o.y+'px';drawLinks();});
-const endDrag=()=>{stage.classList.remove('panning');if(drag&&drag.id&&drag.moved&&S.objs[drag.id]){const o=S.objs[drag.id];const before={x:Math.round(drag.ox),y:Math.round(drag.oy),status:o.status};o.moved=true;
-    if(o.status==='proposal'){o.status='adopted';render();}touch(drag.id);logEv('move',drag.id,before,{x:Math.round(o.x),y:Math.round(o.y),status:o.status,moved:true});}drag=null;};
+  if(drag.box){const r=stage.getBoundingClientRect(),x=ev.clientX-r.left,y=ev.clientY-r.top;
+    const L=Math.min(x,drag.x0),T=Math.min(y,drag.y0),W=Math.abs(x-drag.x0),H=Math.abs(y-drag.y0);Object.assign(drag.m.style,{left:L+'px',top:T+'px',width:W+'px',height:H+'px'});
+    const a=toWorld(L,T),b=toWorld(L+W,T+H);const hit=new Set(drag.add);
+    world.querySelectorAll('.obj').forEach(e=>{const o=S.objs[e.dataset.id];if(!o)return;const w=e.offsetWidth,h=e.offsetHeight;
+      if(o.x<b.x&&o.x+w>a.x&&o.y<b.y&&o.y+h>a.y)hit.add(o.id);});setSel(hit);return;}
+  if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;if(!drag.moved)return;
+  drag.ids.forEach(i=>{const o=S.objs[i];if(!o)return;o.x=drag.starts[i].x+dx/view.k;o.y=drag.starts[i].y+dy/view.k;
+    const e=world.querySelector(`[data-id="${CSS.escape(i)}"]`);if(e){e.style.left=o.x+'px';e.style.top=o.y+'px';}});drawLinks();});
+function endDrag(ev){
+  ptrs.delete(ev.pointerId);if(pinch){if(ptrs.size<2)pinch=null;drag=null;return;}
+  stage.classList.remove('panning');
+  if(drag&&drag.box){drag.m.remove();}
+  else if(drag&&drag.ids&&drag.moved){let re=false;
+    drag.ids.forEach(i=>{const o=S.objs[i];if(!o)return;const st=drag.starts[i];const before={x:Math.round(st.x),y:Math.round(st.y),status:o.status};o.moved=true;
+      if(o.status==='proposal'){o.status='adopted';re=true;}touch(i);logEv('move',i,before,{x:Math.round(o.x),y:Math.round(o.y),status:o.status,moved:true});});
+    if(re)render();}
+  drag=null;}
 stage.addEventListener('pointerup',endDrag);stage.addEventListener('pointercancel',endDrag);
-let lastTap={};
-stage.addEventListener('wheel',ev=>{ev.preventDefault();if(ev.ctrlKey||ev.metaKey||Math.abs(ev.deltaY)>40&&!ev.shiftKey){zoomAt(ev.clientX,ev.clientY,ev.deltaY<0?1.1:1/1.1);}else{view.x-=ev.deltaX;view.y-=ev.deltaY;apply();}},{passive:false});
+stage.addEventListener('wheel',ev=>{ev.preventDefault();
+  if(ev.ctrlKey||ev.metaKey){zoomAt(ev.clientX,ev.clientY,Math.exp(-ev.deltaY*0.01));}           // トラックパッドのピンチ・Ctrl+ホイール
+  else if(ev.deltaMode===1||(Math.abs(ev.deltaY)>=50&&!ev.deltaX&&!ev.shiftKey)){zoomAt(ev.clientX,ev.clientY,ev.deltaY<0?1.12:1/1.12);}   // マウスのホイール
+  else{view.x-=ev.deltaX;view.y-=ev.deltaY;apply();}},{passive:false});   // トラックパッドの2本指スクロール
 function zoomAt(cx,cy,f){const r=stage.getBoundingClientRect();const p=toWorld(cx-r.left,cy-r.top);view.k=Math.min(2.5,Math.max(0.15,view.k*f));view.x=cx-r.left-p.x*view.k;view.y=cy-r.top-p.y*view.k;apply();}
 const center=()=>{const r=stage.getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2];};
-$('zin').onclick=()=>zoomAt(...center(),1.2);$('zout').onclick=()=>zoomAt(...center(),1/1.2);$('zfit').onclick=fit;
+$('zin').onclick=()=>zoomAt(...center(),1.25);$('zout').onclick=()=>zoomAt(...center(),1/1.25);$('zfit').onclick=()=>fit();
+$('panBtn').onclick=()=>{panMode=!panMode;$('panBtn').classList.toggle('on',panMode);stage.classList.toggle('panmode',panMode);};
 function fit(){const os=Object.values(S.objs);if(!os.length){view={x:30,y:30,k:0.75};apply();return;}let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
   os.forEach(o=>{x0=Math.min(x0,o.x);y0=Math.min(y0,o.y);x1=Math.max(x1,o.x+SW);y1=Math.max(y1,o.y+SH);});
   const k=Math.min(1.1,Math.max(0.15,Math.min((stage.clientWidth-60)/(x1-x0),(stage.clientHeight-60)/(y1-y0))));view={k,x:30-x0*k,y:30-y0*k};apply();}
-document.addEventListener('keydown',ev=>{if(!S||$('boardView').hidden)return;if(document.activeElement&&['TEXTAREA','INPUT','SELECT'].includes(document.activeElement.tagName))return;
-  if(RP)return;if((ev.key==='Delete'||ev.key==='Backspace')&&sel&&S.objs[sel]){const id=sel;const b=snap(S.objs[id]);sel=null;render();drop(id);logEv('delete',id,b,null);render();}});
+document.addEventListener('keydown',ev=>{if(!S||$('boardView').hidden)return;
+  if(document.activeElement&&['TEXTAREA','INPUT','SELECT'].includes(document.activeElement.tagName))return;
+  if(ev.code==='Space'){if(document.activeElement&&document.activeElement.tagName==='BUTTON')return;if(!spaceDown){spaceDown=true;stage.classList.add('panmode');}ev.preventDefault();return;}
+  if(RP)return;
+  if((ev.metaKey||ev.ctrlKey)&&ev.key.toLowerCase()==='a'){ev.preventDefault();setSel(Object.keys(S.objs));return;}
+  if(ev.key==='Escape'){setSel([]);return;}
+  if((ev.key==='Delete'||ev.key==='Backspace')&&selSet.size){ev.preventDefault();const ids=[...selSet].filter(i=>S.objs[i]);setSel([]);
+    ids.forEach(i=>{const b=snap(S.objs[i]);drop(i);logEv('delete',i,b,null);});render();}});
+document.addEventListener('keyup',ev=>{if(ev.code==='Space'){spaceDown=false;if(!panMode)stage.classList.remove('panmode');}});
 $('addSticky').onclick=()=>addObj('sticky');$('addText').onclick=()=>addObj('text');
 $('arrowBtn').onclick=()=>{arrowMode=!arrowMode;arrowFrom=null;$('arrowBtn').classList.toggle('on',arrowMode);stage.classList.toggle('arrowmode',arrowMode);};
-document.querySelectorAll('[data-color]').forEach(b=>b.onclick=()=>{color=b.dataset.color;if(sel&&S.objs[sel]&&S.objs[sel].type==='sticky'){const o=S.objs[sel],bc=o.color;o.color=color;render();touch(sel);logEv('color',sel,{color:bc},{color});}});
+document.querySelectorAll('[data-color]').forEach(b=>b.onclick=()=>{color=b.dataset.color;let ch=false;
+  selSet.forEach(i=>{const o=S.objs[i];if(o&&o.type==='sticky'&&o.color!==color){const bc=o.color;o.color=color;touch(i);logEv('color',i,{color:bc},{color});ch=true;}});if(ch)render();});
 $('title').onchange=()=>{const t=$('title').value.trim();if(t&&t!==B.title){logEv('title','',{text:B.title},{text:t});B.title=t;save({title:t});}};
 $('backBtn').onclick=()=>{if(rec.on&&!window.confirm('録音を止めて一覧に戻りますか？'))return;stopRec();flush();location.hash='';};
 $('shareBtn').onclick=()=>{$('shareUrl').value=location.origin+'/board#join='+B.id+'~'+B.join;$('sharePop').hidden=false;$('shareUrl').select();};
@@ -465,7 +529,7 @@ async function startReplay(){if(rec.on){status('録音中は振り返りでき�
   const evs=j.events.filter(e=>e.ms);if(!evs.length){status('まだ操作の記録がありません（この機能を入れる前のボードには記録がありません）',true);return;}
   RP={evs,live:S,T:0,timer:null};const t0=Math.min(evs[0].ms,...B.utts.filter(u=>u.ms).map(u=>u.ms)),t1=evs[evs.length-1].ms;
   const sl=$('rpSlider');sl.min=t0-1000;sl.max=t1+1000;sl.step=1000;sl.value=sl.max;
-  $('boardView').classList.add('replaying');$('replayBar').hidden=false;$('replayBtn').classList.add('on');sel=null;showAt(+sl.value);fit();}
+  $('boardView').classList.add('replaying');$('replayBar').hidden=false;$('replayBtn').classList.add('on');selSet.clear();showAt(+sl.value);fit();}
 function endReplay(){if(!RP)return;clearInterval(RP.timer);S=RP.live;RP=null;lastTalk=-2;$('boardView').classList.remove('replaying');$('replayBar').hidden=true;$('replayBtn').classList.remove('on');$('rpPlay').textContent='▶ 再生';render();B.ver=-1;poll();}
 $('replayBtn').onclick=()=>RP?endReplay():startReplay();$('rpExit').onclick=endReplay;
 $('rpSlider').oninput=()=>showAt(+$('rpSlider').value);
