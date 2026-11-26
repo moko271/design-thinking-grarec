@@ -129,7 +129,7 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
     <div class="tabs"><button type="button" id="tabLogin" class="on">ログイン</button><button type="button" id="tabSignup">新しく登録</button><button type="button" id="tabReq">招待コードをもらう</button></div>
     <form id="reqForm" hidden>
       <p style="font-size:13px;line-height:1.7;margin:0 0 12px">使ってみたい人は、ここから申し込んでください。研究者（もこ）が確認して、招待コードをメールで送ります。</p>
-      <div class="field"><label for="rqName">お名前（ニックネームでOK）</label><input type="text" id="rqName" maxlength="40" autocomplete="nickname"></div>
+      <div class="field"><label for="rqName">お名前</label><input type="text" id="rqName" maxlength="40" autocomplete="name"></div>
       <div class="field"><label for="rqEmail">連絡先のメールアドレス（招待コードを送ります）</label><input type="text" id="rqEmail" maxlength="120" inputmode="email" autocomplete="email"></div>
       <div class="field"><label for="rqUse">どんな場面で使いたい？</label><select id="rqUse"><option>授業のグループワーク</option><option>ゼミ・研究室</option><option>自分の研究の壁打ち</option><option>サークル・団体の話し合い</option><option>仕事の会議</option><option>その他</option></select></div>
       <div class="field" style="max-width:220px"><label for="rqN">いっしょに使うだいたいの人数</label><input type="text" id="rqN" inputmode="numeric" maxlength="2" value="1"></div>
@@ -688,7 +688,7 @@ function wrapText(ctx,text,maxW){const out=[];let line='';for(const ch of String
 function drawBoardCanvas(maxPx){relayout();const os=Object.values(S.objs);const PAD=40,HEAD=70;
   if(!os.length)return null;let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
   os.forEach(o=>{const w=o.type==='text'?180:SW,h=o.type==='text'?30:SH;x0=Math.min(x0,o.x);y0=Math.min(y0,o.y);x1=Math.max(x1,o.x+w);y1=Math.max(y1,o.y+h);});
-  const W=x1-x0+PAD*2,H=y1-y0+PAD*2+HEAD;const k=Math.min(2,maxPx/Math.max(W,H));
+  const W=Math.max(x1-x0+PAD*2,900),H=y1-y0+PAD*2+HEAD;const k=Math.min(2,maxPx/Math.max(W,H));
   const cv=document.createElement('canvas');cv.width=Math.round(W*k);cv.height=Math.round(H*k);const ctx=cv.getContext('2d');ctx.scale(k,k);
   const FONT='"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif';
   ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,H);

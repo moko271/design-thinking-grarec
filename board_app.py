@@ -1159,7 +1159,7 @@ def request_invite():
     except (TypeError, ValueError):
         n = 1
     if not name or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
-        return jsonify(ok=False, error="お名前（ニックネームでOK）と、連絡先のメールアドレスを入れてください"), 400
+        return jsonify(ok=False, error="お名前と、連絡先のメールアドレスを入れてください"), 400
     if d.get("adult") is not True:
         return jsonify(ok=False, error="いまは、参加する人が全員18歳以上の場合だけ使ってもらっています"), 400
     hits.append(now)
