@@ -53,6 +53,22 @@ textarea{width:100%;font:inherit;font-size:12px;border:1px solid var(--line);bor
   <a href="/board/admin/export">書き出す（grarec_board_export.json）</a>
 </div>
 
+<div class="box"><h2>ボード</h2>
+  <p class="note">「見る」で、そのボードを見るだけで開けます（録音中なら3秒ごとに更新、「振り返り」も使えます）。持ち主が「研究に使わない」にしたボードは、中身は見られません。</p>
+  <div class="tbl"><table><thead><tr><th>ボード</th><th>持ち主</th><th>更新</th><th>録音</th><th>AIの付箋</th><th>研究</th><th></th></tr></thead><tbody id="blist"></tbody></table></div>
+</div>
+
+<div class="box"><h2>届いた感想</h2>
+  <p class="note" id="fbsum"></p>
+  <div class="tbl"><table><thead><tr><th>日時</th><th>ID・ボード</th><th>全体</th><th>AIの付箋</th><th>よかった</th><th>変だった・困った</th></tr></thead><tbody id="fblist"></tbody></table></div>
+</div>
+
+<div class="box"><h2>保存した音声</h2>
+  <p class="note">録音を始めるときに全員が「音声も保存してよい」と言った録音だけが入っています。ボードの人には見えません。ダウンロードしたら、サーバーからは消しておくとディスクが空きます。</p>
+  <p class="note" id="disk"></p>
+  <div class="tbl"><table><thead><tr><th>ボード</th><th>持ち主</th><th>ファイル</th><th>大きさ</th><th></th></tr></thead><tbody id="alist"></tbody></table></div>
+</div>
+
 <div class="box"><h2>連絡文</h2>
   <p class="note">「連絡文」を押すと、その人のコードを入れた文がここに入ります。直してから送ってください。</p>
   <textarea id="msg" rows="12" aria-label="連絡文"></textarea>
@@ -71,7 +87,8 @@ function message(code){return `研究で作っているツールを、使って�
 リンク：${URL_BOARD}
 招待コード：${code}
 
-・登録のときに、研究データとして使うことの説明が出ます（名前は出しません。音声は保存しません）
+・登録のときに、研究データとして使うことの説明が出ます（名前は出しません）
+・音声は、録音のときにその場の全員がOKしたときだけ保存されます
 ・録音する前に、その場にいる人みんなに伝えてOKをもらってから始めてください
 ・参加する人は全員18歳以上でお願いします
 ・いっしょに使う人も、同じ招待コードで登録できます
@@ -94,5 +111,31 @@ async function load(){const j=await api('/invites');const L=$('list');L.innerHTM
     const msg=document.createElement('button');msg.type='button';msg.textContent='連絡文';msg.onclick=()=>showMsg(i.code);a.append(t,' ',msg);
     L.appendChild(tr);});
   $('legacy').textContent=(j.legacy_code_on?'共通の招待コード（BOARD_INVITE_CODE）がまだ使える状態です。全員にコードを配り直したら、Render の Environment から消してください。':'共通の招待コードは使えない状態です。')+(j.legacy_users?` 共通コードで登録した人：${j.legacy_users}人`:'');}
-load();
+async function loadAudio(){const j=await api('/audio');const L=$('alist');L.innerHTML='';
+  $('disk').textContent=`ディスクの空き：${j.disk.free_mb}MB ／ ${j.disk.total_mb}MB（空きが ${j.min_free_mb}MB を切ると音声は保存しません）`;
+  if(!j.boards.length){L.innerHTML='<tr><td colspan="5" class="note">まだありません</td></tr>';return;}
+  j.boards.forEach(a=>{const tr=document.createElement('tr');const td=t=>{const d=document.createElement('td');d.textContent=t;tr.appendChild(d);return d;};
+    const t=td(a.title);const sm=document.createElement('div');sm.className='users';sm.textContent=a.updated;t.appendChild(sm);td(a.owner||'—');td(a.files+'本');td(a.mb+'MB');
+    const x=document.createElement('td');const dl=document.createElement('a');dl.href='/board/admin/audio/'+encodeURIComponent(a.board)+'.zip';dl.textContent='ダウンロード';
+    const del=document.createElement('button');del.type='button';del.textContent='サーバーから消す';
+    del.onclick=async()=>{if(del.dataset.sure!=='1'){del.dataset.sure='1';del.textContent='本当に消す（元に戻せません）';setTimeout(()=>{del.dataset.sure='';del.textContent='サーバーから消す';},4000);return;}
+      await fetch('/board/admin/api/audio/'+encodeURIComponent(a.board),{method:'DELETE',headers:{'X-GraRec':'1'},credentials:'same-origin'});loadAudio();};
+    x.append(dl,' ',del);tr.appendChild(x);L.appendChild(tr);});}
+async function loadFb(){const j=await api('/feedback');const L=$('fblist');L.innerHTML='';
+  const st=k=>j.feedback.map(f=>f[k]).filter(Boolean);const avg=a=>a.length?(a.reduce((x,y)=>x+y,0)/a.length).toFixed(1):'—';
+  $('fbsum').textContent=`${j.feedback.length}件 ・ 全体の平均 ★${avg(st('stars'))}（${st('stars').length}人） ・ AIの付箋の平均 ★${avg(st('stars_ai'))}（${st('stars_ai').length}人）`;
+  if(!j.feedback.length){L.innerHTML='<tr><td colspan="6" class="note">まだありません</td></tr>';return;}
+  const star=n=>n?'★'.repeat(n)+'☆'.repeat(5-n):'—';
+  j.feedback.forEach(f=>{const tr=document.createElement('tr');const td=(t,cls)=>{const d=document.createElement('td');if(cls)d.className=cls;d.textContent=t;tr.appendChild(d);return d;};
+    td(f.at,'num');const w=td(f.user);if(f.board){const sm=document.createElement('div');sm.className='users';sm.textContent=f.board;w.appendChild(sm);}
+    td(star(f.stars),'num');td(star(f.stars_ai),'num');td(f.good||'');td(f.bad||'');L.appendChild(tr);});}
+async function loadBoards(){const j=await api('/boards');const L=$('blist');L.innerHTML='';
+  if(!j.boards.length){L.innerHTML='<tr><td colspan="7" class="note">まだありません</td></tr>';return;}
+  j.boards.forEach(b=>{const tr=document.createElement('tr');const td=(t,cls)=>{const d=document.createElement('td');if(cls)d.className=cls;d.textContent=t;tr.appendChild(d);return d;};
+    const t=td(b.title);const sm=document.createElement('div');sm.className='users';sm.textContent=`作成 ${b.created} ・ 一緒に使う人 ${b.members}人`;t.appendChild(sm);
+    td(b.owner);td(b.updated,'num');td(b.rec_min+'分','num');td(b.cards+'枚','num');
+    const r=td(null);const sp=document.createElement('span');sp.className='st '+(b.research_ok?'on':'off');sp.textContent=b.research_ok?'使う':'使わない';r.appendChild(sp);
+    const a=td(null);if(b.research_ok){const l=document.createElement('a');l.href='/board/admin/view/'+encodeURIComponent(b.id)+'#b='+encodeURIComponent(b.id);l.target='_blank';l.rel='noopener';l.textContent='見る';a.appendChild(l);}
+    L.appendChild(tr);});}
+load();loadAudio();loadFb();loadBoards();
 </script></body></html>

@@ -5,7 +5,9 @@ GraRec ボード（/board）：マイクで録音しながら、AIが付箋を�
 - 招待コード＋ID・パスワードでアカウントを作る。ログインすると自分のボード（過去のものも）が一覧に出る
 - 共有リンクを開いたログイン済みの人は、そのボードを一緒に見て・編集できる（3秒ごとに同期）
 - 録音は1分ごとに区切ってサーバーへ送る → whisper-1 で文字起こし → 付箋を作る（研究の live_eval と同じ流れ）
-- 音声はこのサーバーに残さない（文字起こしが終わったら消す）。文字起こしと付箋はボードに保存する
+- 音声は、録音を始めるときに「音声も保存してよい」と全員が同意したときだけ、研究用に保存する（DATA_DIR/board_audio/<ボード>/）。
+  同意がなければ文字起こしのあとすぐ消す。保存した音声は管理画面からだけ取り出せる（ボードの人にも見えない）。
+  ボードを消す・「研究に使う」を外すと、そのボードの音声も消す。ディスクの空きが少ないときは保存しない
 - 1人1日あたり・全体で1日あたりの録音時間に上限がある（費用を抑えるため）
 - 研究データとして使う同意を、2段階でとって記録する（consents テーブル）
     1. 登録するとき：アカウントを作る人が、説明（CONSENT_VER の版）を読んで同意し、18歳以上であることを確かめる
@@ -35,13 +37,16 @@ import json
 import time
 import sqlite3
 import secrets
+import shutil
+import zipfile
+import io
 import tempfile
 import threading
 import traceback
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 
-from flask import Blueprint, request, jsonify, session, send_from_directory
+from flask import Blueprint, request, jsonify, session, send_from_directory, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 
 JST = timezone(timedelta(hours=9))
@@ -51,7 +56,7 @@ _board_locks = {}
 _locks_guard = threading.Lock()
 _fails = {}   # ログイン失敗の回数（ユーザー名ごと、メモリだけ）
 
-CONSENT_VER = "2026-11-24.2"   # 説明文（static/board.html の CONSENT）を変えたら、ここの日付も変える
+CONSENT_VER = "2026-11-26"   # 説明文（static/board.html の CONSENT）を変えたら、ここの日付も変える
 CONSENT_MAX_AGE = 12 * 3600   # 録音前の確認は12時間有効（それより後は確認し直す）
 HALLUCINATION = ("ご視聴ありがとうございました", "チャンネル登録", "最後までご視聴", "おやすみなさい")
 WHISPER_HINT = "グループワークの話し合いです。"
@@ -69,7 +74,9 @@ def _now():
 # ---------------- 初期化 ----------------
 def init_board(app, client, chat_json, data_dir):
     os.makedirs(data_dir, exist_ok=True)
-    CFG.update(client=client, chat_json=chat_json, db=os.path.join(data_dir, "board.db"),
+    CFG.update(client=client, chat_json=chat_json, db=os.path.join(data_dir, "board.db"), data_dir=data_dir,
+               audio_dir=os.path.join(data_dir, "board_audio"),
+               min_free=float(os.getenv("BOARD_AUDIO_MIN_FREE_MB", "300")) * 1024 * 1024,
                invite=os.getenv("BOARD_INVITE_CODE", ""),
                daily=float(os.getenv("BOARD_DAILY_MIN", "120")) * 60,
                global_daily=float(os.getenv("BOARD_GLOBAL_DAILY_MIN", "600")) * 60,
@@ -113,6 +120,8 @@ def init_board(app, client, chat_json, data_dir):
             c.execute("ALTER TABLE users ADD COLUMN consent_ver TEXT")
         if "invite_id" not in cols:
             c.execute("ALTER TABLE users ADD COLUMN invite_id INTEGER")
+        c.execute("""CREATE TABLE IF NOT EXISTS feedback(id INTEGER PRIMARY KEY AUTOINCREMENT, user INTEGER, board TEXT,
+            stars INTEGER, stars_ai INTEGER, good TEXT, bad TEXT, at TEXT)""")
         c.execute("""CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, board TEXT NOT NULL, user INTEGER,
             type TEXT, obj TEXT, before TEXT, after TEXT, rec_t REAL, client_ms REAL, at TEXT, at_ts REAL)""")
         c.execute("CREATE INDEX IF NOT EXISTS events_board ON events(board, client_ms)")
@@ -366,6 +375,62 @@ def get_board(uid, bid):
                    research_ok=bool(b["research_ok"]))
 
 
+def _admin_required_late(f):
+    @wraps(f)
+    def w(*a, **k):
+        return _admin_required(f)(*a, **k)
+    return w
+
+
+def _audio_dir(bid):
+    return os.path.join(CFG["audio_dir"], re.sub(r"[^\w\-]", "_", bid))
+
+
+def _delete_audio(bid):
+    shutil.rmtree(_audio_dir(bid), ignore_errors=True)
+
+
+def _disk_free():
+    try:
+        return shutil.disk_usage(CFG["data_dir"]).free
+    except OSError:
+        return 0
+
+
+@bp.route("/board/api/feedback", methods=["POST"])
+@login_required
+def send_feedback(uid):
+    """使ってみた感想：星（全体・AIの付箋）と、よかったところ・変だったところ"""
+    d = request.get_json(silent=True) or {}
+    def star(v):
+        try:
+            v = int(v)
+        except (TypeError, ValueError):
+            return None
+        return v if 1 <= v <= 5 else None
+    stars, stars_ai = star(d.get("stars")), star(d.get("stars_ai"))
+    good, bad = str(d.get("good") or "").strip()[:2000], str(d.get("bad") or "").strip()[:2000]
+    if not (stars or stars_ai or good or bad):
+        return jsonify(ok=False, error="星か、ひとことを入れてください"), 400
+    bid = str(d.get("board") or "")[:40] or None
+    with _db() as c:
+        if bid and not _can(c, bid, uid)[0]:
+            bid = None
+        c.execute("INSERT INTO feedback(user, board, stars, stars_ai, good, bad, at) VALUES(?,?,?,?,?,?,?)",
+                  (uid, bid, stars, stars_ai, good, bad, _now()))
+    return jsonify(ok=True)
+
+
+@bp.route("/board/admin/api/feedback")
+@_admin_required_late
+def admin_feedback():
+    with _db() as c:
+        rows = c.execute("""SELECT f.*, u.username, b.title FROM feedback f LEFT JOIN users u ON u.id=f.user
+            LEFT JOIN boards b ON b.id=f.board ORDER BY f.id DESC""").fetchall()
+    return jsonify(ok=True, feedback=[{"at": r["at"], "user": r["username"] or "", "board": r["title"] or "",
+                                       "stars": r["stars"], "stars_ai": r["stars_ai"], "good": r["good"], "bad": r["bad"]} for r in rows])
+
+
 @bp.route("/board/api/boards/<bid>/research", methods=["POST"])
 @login_required
 def set_research(uid, bid):
@@ -378,6 +443,8 @@ def set_research(uid, bid):
             return jsonify(ok=False, error="ボードの持ち主だけが変えられます"), 403
         c.execute("UPDATE boards SET research_ok=? WHERE id=?", (ok, bid))
         _record_consent(c, "research_on" if ok else "research_off", uid, board=bid)
+    if not ok:
+        _delete_audio(bid)   # 研究に使わないなら、保存した音声は持っておく理由がないので消す
     return jsonify(ok=True, research_ok=bool(ok))
 
 
@@ -398,9 +465,10 @@ def record_consent(uid, bid):
         b, _ = _can(c, bid, uid)
         if not b:
             return jsonify(ok=False, error="ボードが見つかりません"), 404
+        audio = d.get("audio") is True and bool(b["research_ok"])
         cid = _record_consent(c, "record", uid, board=bid, n_people=n,
-                              detail={"told": True, "agreed": True, "adult": True})
-    return jsonify(ok=True, consent_id=cid)
+                              detail={"told": True, "agreed": True, "adult": True, "audio": audio})
+    return jsonify(ok=True, consent_id=cid, audio=audio)
 
 
 EVENT_TYPES = {"ai_card", "ai_place", "band_add", "adopt", "reject", "restore", "add", "edit", "move", "color",
@@ -490,6 +558,7 @@ def delete_board(uid, bid):
             c.execute("DELETE FROM boards WHERE id=?", (bid,))
             c.execute("DELETE FROM members WHERE board=?", (bid,))
             c.execute("DELETE FROM events WHERE board=?", (bid,))
+            _delete_audio(bid)
         else:   # 共有されたボードは、自分の一覧から外すだけ
             c.execute("DELETE FROM members WHERE board=? AND user=?", (bid, uid))
     return jsonify(ok=True, deleted=owner)
@@ -668,7 +737,7 @@ def chunk(uid, bid):
     except ValueError:
         cons = 0
     with _db() as c:
-        cr = c.execute("SELECT at_ts FROM consents WHERE id=? AND kind='record' AND user=? AND board=?",
+        cr = c.execute("SELECT at_ts, detail FROM consents WHERE id=? AND kind='record' AND user=? AND board=?",
                        (cons, uid, bid)).fetchone()
     if not cr or time.time() - cr["at_ts"] > CONSENT_MAX_AGE:
         return jsonify(ok=False, need_consent=True, error="録音の前の確認がまだです。もう一度「録音を始める」から確かめてください"), 403
@@ -704,6 +773,22 @@ def chunk(uid, bid):
             if started and abs(started / 1000 - time.time()) > 3600:
                 started = None
             new = _transcribe(path, t0, started)
+            saved = None
+            try:   # 全員が「音声も保存してよい」と言った録音だけ残す
+                want = bool(json.loads(cr["detail"] or "{}").get("audio")) and bool(b["research_ok"])
+                if want and _disk_free() > CFG["min_free"]:
+                    ad = _audio_dir(bid)
+                    os.makedirs(ad, exist_ok=True)
+                    saved = f"{int(t0):06d}s_{int(started or time.time() * 1000)}{ext}"
+                    shutil.copyfile(path, os.path.join(ad, saved))
+                    with open(os.path.join(ad, "manifest.jsonl"), "a", encoding="utf-8") as mf:
+                        mf.write(json.dumps({"file": saved, "rec_t0": t0, "dur": dur, "started_ms": started, "consent_id": cons,
+                                             "user": uid, "saved_at": _now()}, ensure_ascii=False) + "\n")
+                elif want:
+                    print("board: ディスクの空きが少ないので音声を保存しませんでした")
+            except Exception:
+                print("board audio save error:", traceback.format_exc())
+                saved = None
             with _db() as c:
                 c.execute("INSERT INTO usage(user, day, sec) VALUES(?,?,?) ON CONFLICT(user, day) DO UPDATE SET sec=sec+?",
                           (uid, _today(), dur, dur))
@@ -719,7 +804,7 @@ def chunk(uid, bid):
                 c.execute("UPDATE boards SET utts=?, ai=?, rec_sec=?, updated=? WHERE id=?",
                           (json.dumps(utts, ensure_ascii=False), json.dumps(ai, ensure_ascii=False), t0 + dur, _now(), bid))
                 _log_events(c, bid, uid, [{"type": "ai_card", "obj": x["id"], "after": x, "rec_t": x["t"]} for x in added])
-        return jsonify(ok=True, utts=new, cards=added, rec_sec=t0 + dur, usage=_usage_info(uid))
+        return jsonify(ok=True, utts=new, cards=added, rec_sec=t0 + dur, usage=_usage_info(uid), audio_saved=bool(saved))
     except Exception as e:
         print("board chunk error:", traceback.format_exc())
         msg = str(e)
@@ -728,7 +813,7 @@ def chunk(uid, bid):
         return jsonify(ok=False, error="文字起こしに失敗しました（この1分は飛ばして続けます）"), 500
     finally:
         try:
-            os.remove(path)   # 音声は残さない
+            os.remove(path)   # 一時ファイルは消す（保存するものは上でコピー済み）
         except OSError:
             pass
 
@@ -739,6 +824,22 @@ def _admin_ok():
     a = request.authorization
     return bool(p) and a is not None and secrets.compare_digest((a.username or "").encode(), u.encode()) \
         and secrets.compare_digest((a.password or "").encode(), p.encode())
+
+
+def _audio_manifest(bid):
+    """保存した音声ファイルの一覧（ファイル名・録音の何秒目からか・実際の時刻）。音声そのものは /board/admin/audio/<id>.zip で取る"""
+    p = os.path.join(_audio_dir(bid), "manifest.jsonl")
+    if not os.path.exists(p):
+        return []
+    out = []
+    for line in open(p, encoding="utf-8"):
+        try:
+            m = json.loads(line)
+            if os.path.exists(os.path.join(_audio_dir(bid), m["file"])):
+                out.append({k: m.get(k) for k in ("file", "rec_t0", "dur", "started_ms", "consent_id")})
+        except Exception:
+            pass
+    return out
 
 
 @bp.route("/board/admin/export")
@@ -761,8 +862,11 @@ def export():
             out.append({"board": b["id"], "owner": b["owner"], "members": members, "title": b["title"],
                         "agenda": json.loads(b["agenda"] or "[]"), "created": b["created"], "updated": b["updated"],
                         "rec_sec": b["rec_sec"], "utts": json.loads(b["utts"] or "[]"), "ai": json.loads(b["ai"] or "{}"),
-                        "state": json.loads(b["state"] or "{}"), "consents": cons, "events": evs})
-    r = jsonify(exported=_now(), consent_ver=CONSENT_VER, boards=out)
+                        "state": json.loads(b["state"] or "{}"), "consents": cons, "events": evs,
+                        "audio_files": _audio_manifest(b["id"])})
+        fb = [{"user": r["user"], "board": r["board"], "stars": r["stars"], "stars_ai": r["stars_ai"], "good": r["good"],
+               "bad": r["bad"], "at": r["at"]} for r in c.execute("SELECT * FROM feedback ORDER BY id")]
+    r = jsonify(exported=_now(), consent_ver=CONSENT_VER, boards=out, feedback=fb)
     r.headers["Content-Disposition"] = "attachment; filename=grarec_board_export.json"
     return r
 
@@ -854,3 +958,105 @@ def admin_update_invite(iid):
         if "memo" in d:
             c.execute("UPDATE invites SET memo=? WHERE id=?", (str(d["memo"]).strip()[:60], iid))
     return jsonify(ok=True)
+
+
+# ---------------- 保存した音声（管理画面だけ） ----------------
+@bp.route("/board/admin/api/audio")
+@_admin_required
+def admin_audio():
+    out = []
+    root = CFG["audio_dir"]
+    with _db() as c:
+        for d in (sorted(os.listdir(root)) if os.path.isdir(root) else []):
+            p = os.path.join(root, d)
+            files = [f for f in os.listdir(p) if not f.endswith(".jsonl")] if os.path.isdir(p) else []
+            if not files:
+                continue
+            size = sum(os.path.getsize(os.path.join(p, f)) for f in files)
+            b = c.execute("SELECT b.title, b.updated, u.username FROM boards b LEFT JOIN users u ON u.id=b.owner WHERE b.id=?", (d,)).fetchone()
+            out.append({"board": d, "title": b["title"] if b else "（消されたボード）", "owner": b["username"] if b else "",
+                        "updated": b["updated"] if b else "", "files": len(files), "mb": round(size / 1024 / 1024, 1)})
+    du = shutil.disk_usage(CFG["data_dir"])
+    return jsonify(ok=True, boards=out, disk={"free_mb": round(du.free / 1024 / 1024), "total_mb": round(du.total / 1024 / 1024)},
+                   min_free_mb=round(CFG["min_free"] / 1024 / 1024))
+
+
+@bp.route("/board/admin/audio/<bid>.zip")
+@_admin_required
+def admin_audio_zip(bid):
+    p = _audio_dir(bid)
+    if not os.path.isdir(p):
+        return ("音声がありません", 404)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+        for f in sorted(os.listdir(p)):
+            z.write(os.path.join(p, f), f)
+    buf.seek(0)
+    return send_file(buf, mimetype="application/zip", as_attachment=True, download_name=f"board_audio_{bid}.zip")
+
+
+@bp.route("/board/admin/api/audio/<bid>", methods=["DELETE"])
+@_admin_required
+def admin_audio_delete(bid):
+    _delete_audio(bid)
+    return jsonify(ok=True)
+
+
+# ---------------- ボードを見る（管理画面だけ・見るだけ） ----------------
+# 研究に使ってよいボードだけ中身を見られる（持ち主が「研究に使う」を外したボードは、一覧に名前だけ出す）
+@bp.route("/board/admin/view/<bid>")
+@_admin_required
+def admin_view(bid):
+    r = send_from_directory("static", "board.html")
+    r.headers["Cache-Control"] = "no-store"
+    return r
+
+
+@bp.route("/board/admin/api/boards")
+@_admin_required
+def admin_boards():
+    with _db() as c:
+        rows = c.execute("""SELECT b.id, b.title, b.created, b.updated, b.rec_sec, b.research_ok, b.ai, u.username,
+            (SELECT COUNT(*) FROM members m WHERE m.board=b.id) AS n_members,
+            (SELECT COUNT(*) FROM events e WHERE e.board=b.id) AS n_events
+            FROM boards b LEFT JOIN users u ON u.id=b.owner ORDER BY b.updated DESC""").fetchall()
+    out = []
+    for r in rows:
+        out.append({"id": r["id"], "title": r["title"], "owner": r["username"] or "", "created": r["created"], "updated": r["updated"],
+                    "rec_min": round((r["rec_sec"] or 0) / 60), "cards": len(json.loads(r["ai"] or "{}").get("cards", [])),
+                    "members": r["n_members"], "events": r["n_events"], "research_ok": bool(r["research_ok"])})
+    return jsonify(ok=True, boards=out)
+
+
+def _admin_board_row(bid):
+    with _db() as c:
+        return c.execute("SELECT * FROM boards WHERE id=?", (bid,)).fetchone()
+
+
+@bp.route("/board/admin/api/boards/<bid>")
+@_admin_required
+def admin_board(bid):
+    b = _admin_board_row(bid)
+    if not b:
+        return jsonify(ok=False, error="ボードが見つかりません（消されたかもしれません）"), 404
+    if not b["research_ok"]:
+        return jsonify(ok=False, error="持ち主が「研究に使わない」にしているボードなので、中身は見られません"), 403
+    if request.args.get("v") and str(b["ver"]) == request.args.get("v"):
+        return jsonify(ok=True, same=True, ver=b["ver"])
+    return jsonify(ok=True, id=b["id"], title=b["title"], agenda=json.loads(b["agenda"] or "[]"),
+                   state=json.loads(b["state"] or "{}"), ver=b["ver"], utts=json.loads(b["utts"] or "[]"),
+                   rec_sec=b["rec_sec"] or 0, owner=False, join_token=None, research_ok=True, admin=True)
+
+
+@bp.route("/board/admin/api/boards/<bid>/events")
+@_admin_required
+def admin_board_events(bid):
+    b = _admin_board_row(bid)
+    if not b or not b["research_ok"]:
+        return jsonify(ok=False, error="見られないボードです"), 403
+    with _db() as c:
+        rows = c.execute("SELECT e.*, u.username FROM events e LEFT JOIN users u ON u.id=e.user WHERE board=? "
+                         "ORDER BY client_ms, id", (bid,)).fetchall()
+    return jsonify(ok=True, events=[{"type": r["type"], "obj": r["obj"], "before": json.loads(r["before"]) if r["before"] else None,
+                                     "after": json.loads(r["after"]) if r["after"] else None, "rec_t": r["rec_t"],
+                                     "ms": r["client_ms"], "who": r["username"] or ""} for r in rows])
