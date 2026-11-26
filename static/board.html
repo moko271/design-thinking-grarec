@@ -355,7 +355,8 @@ function placeAI(card){
   const par0=card.parent&&S.objs[card.parent];
   if(card.rel==='arrow'&&par0&&par0.ai&&par0.c!=null&&par0.band)card.band=par0.band;
   const i=bandOf(card.band||'その他'),b=S.bands[i];
-  const occ=(c,r)=>(c===0&&r===0)||Object.values(S.objs).some(o=>o.ai&&o.band===b.name&&o.c===c&&o.r===r);
+  relayout();const free=freeObjs(S),by=b._y!=null?b._y:Y0;
+  const occ=(c,r)=>(c===0&&r===0)||Object.values(S.objs).some(o=>o.ai&&o.band===b.name&&o.c===c&&o.r===r)||hitsFree(free,c*CW,by+r*CH);
   const par=card.parent&&S.objs[card.parent];let c,r;
   if(QT.includes(card.trig)){c=b.nextCol;r=0;while(occ(c,r))c++;b.qcol=c;}
   else if(card.rel==='arrow'&&par&&par.band===b.name&&par.c!=null){c=par.c+1;r=par.r;while(occ(c,r))c++;}
@@ -370,10 +371,20 @@ function placeAI(card){
 
 function apply(){world.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.k})`;}
 // 帯の高さは、その帯で使っている行の数だけ。前の帯がのびたら、後ろの帯を下へずらす（手で動かした付箋はそのまま）
-function relayout(st){st=st||S;if(!st||!st.bands)return;let y=Y0;const os=Object.values(st.objs);
-  st.bands.forEach((b,i)=>{let maxR=0;os.forEach(o=>{if(o.ai&&o.band===b.name&&o.r!=null)maxR=Math.max(maxR,o.r);});
-    const h=st.objs['band'+i];if(h&&!h.moved){h.x=0;h.y=y;}
-    os.forEach(o=>{if(o.ai&&o.band===b.name&&!o.moved&&o.c!=null){o.x=o.c*CW;o.y=y+o.r*CH;}});
+// 人が置いた付箋・手で動かした付箋（＝自動の並びから外れたもの）とは重ならないようにする
+function freeObjs(st){return Object.values(st.objs).filter(o=>(!o.ai&&!o.header)||o.moved);}
+function hitsFree(free,x,y){return free.some(f=>{const w=f.type==='text'?140:SW,h=f.type==='text'?28:SH;return x<f.x+w+10&&x+SW+10>f.x&&y<f.y+h+10&&y+SH+10>f.y;});}
+const cnum=o=>parseInt(String(o.id).replace(/\D/g,''),10)||0;
+function relayout(st){st=st||S;if(!st||!st.bands)return;let y=Y0;const os=Object.values(st.objs),free=freeObjs(st);
+  st.bands.forEach((b,i)=>{
+    const h=st.objs['band'+i];
+    if(h&&!h.moved){let g=0;while(hitsFree(free,0,y)&&g++<30)y+=CH/2;h.x=0;h.y=y;}   // 見出しの場所に手で置いた付箋があれば、帯ごと下へ
+    b._y=y;const used=new Set(['0,0']);let maxR=0;
+    // 決めた場所（c,r）に、手で置いた付箋があれば、同じ列の下（あふれたら右の列）の空いているところへずらして見せる
+    os.filter(o=>o.ai&&o.band===b.name&&!o.moved&&o.c!=null).sort((a,b2)=>cnum(a)-cnum(b2)).forEach(o=>{
+      let c=o.c,r=o.r,g=0;
+      while((used.has(c+','+r)||hitsFree(free,c*CW,y+r*CH))&&g++<300){r++;if(r>STACK){c++;r=o.r;}}
+      used.add(c+','+r);o.x=c*CW;o.y=y+r*CH;maxR=Math.max(maxR,r);});
     y+=(maxR+1)*CH+GAP;});}
 function render(){if(!S)return;relayout();
   world.querySelectorAll('.obj').forEach(e=>e.remove());
