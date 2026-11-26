@@ -125,6 +125,14 @@ def init_board(app, client, chat_json, data_dir):
             c.execute("ALTER TABLE users ADD COLUMN invite_id INTEGER")
         c.execute("""CREATE TABLE IF NOT EXISTS invite_requests(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT,
             use_case TEXT, note TEXT, n_people INTEGER, status TEXT DEFAULT 'new', invite_id INTEGER, created TEXT, done_at TEXT)""")
+        c.execute("CREATE TABLE IF NOT EXISTS settings(k TEXT PRIMARY KEY, v TEXT)")
+        for tbl, col, typ in (("invite_requests", "survey_ok", "INTEGER"), ("invite_requests", "interview_ok", "INTEGER"),
+                              ("invites", "source", "TEXT"), ("users", "survey_pre_at", "TEXT"), ("users", "survey_post_at", "TEXT")):
+            try:
+                if col not in {r[1] for r in c.execute(f"PRAGMA table_info({tbl})")}:
+                    c.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {typ}")
+            except sqlite3.OperationalError:
+                pass   # テーブルがまだない（下で作る）
         c.execute("""CREATE TABLE IF NOT EXISTS feedback(id INTEGER PRIMARY KEY AUTOINCREMENT, user INTEGER, board TEXT,
             stars INTEGER, stars_ai INTEGER, good TEXT, bad TEXT, at TEXT)""")
         c.execute("""CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, board TEXT NOT NULL, user INTEGER,
@@ -224,7 +232,40 @@ def me():
     with _db() as c:
         cv = c.execute("SELECT consent_ver FROM users WHERE id=?", (uid,)).fetchone()["consent_ver"]
     return jsonify(ok=True, user=u["username"], usage=_usage_info(uid), consent_needed=cv != CONSENT_VER,
-                   consent_ver=CONSENT_VER, contact=CFG["contact"])
+                   consent_ver=CONSENT_VER, contact=CFG["contact"], survey=_survey_info(uid))
+
+
+def _setting(k, default=""):
+    with _db() as c:
+        r = c.execute("SELECT v FROM settings WHERE k=?", (k,)).fetchone()
+    return r["v"] if r else default
+
+
+def _survey_info(uid):
+    """申し込み（招待コードをもらう）から来た人にだけ、使う前・使った後のアンケートを出す。回答者番号（P0012 など）をリンクに入れる"""
+    with _db() as c:
+        r = c.execute("""SELECT u.survey_pre_at, u.survey_post_at, i.source FROM users u LEFT JOIN invites i ON i.id=u.invite_id
+            WHERE u.id=?""", (uid,)).fetchone()
+    if not r or r["source"] != "request":
+        return None
+    pid = f"P{uid:04d}"
+    out = {"pid": pid}
+    for k in ("pre", "post"):
+        url = _setting("survey_" + k)
+        if url.startswith("https://"):
+            out[k] = {"url": url.replace("{id}", pid), "done": bool(r[f"survey_{k}_at"])}
+    return out if ("pre" in out or "post" in out) else None
+
+
+@bp.route("/board/api/survey_done", methods=["POST"])
+@login_required
+def survey_done(uid):
+    which = (request.get_json(silent=True) or {}).get("which")
+    if which not in ("pre", "post"):
+        return jsonify(ok=False), 400
+    with _db() as c:
+        c.execute(f"UPDATE users SET survey_{which}_at=? WHERE id=?", (_now(), uid))
+    return jsonify(ok=True)
 
 
 def _record_consent(c, kind, uid, board=None, n_people=None, detail=None):
@@ -927,7 +968,10 @@ def export():
                         "audio_files": _audio_manifest(b["id"])})
         fb = [{"user": r["user"], "board": r["board"], "stars": r["stars"], "stars_ai": r["stars_ai"], "good": r["good"],
                "bad": r["bad"], "at": r["at"]} for r in c.execute("SELECT * FROM feedback ORDER BY id")]
-    r = jsonify(exported=_now(), consent_ver=CONSENT_VER, boards=out, feedback=fb)
+        parts = [{"user": u["id"], "pid": f"P{u['id']:04d}", "via_request": u["source"] == "request",
+                  "survey_pre_at": u["survey_pre_at"], "survey_post_at": u["survey_post_at"]}
+                 for u in c.execute("SELECT u.id, u.survey_pre_at, u.survey_post_at, i.source FROM users u LEFT JOIN invites i ON i.id=u.invite_id")]
+    r = jsonify(exported=_now(), consent_ver=CONSENT_VER, boards=out, feedback=fb, participants=parts)
     r.headers["Content-Disposition"] = "attachment; filename=grarec_board_export.json"
     return r
 
@@ -1165,8 +1209,9 @@ def request_invite():
     hits.append(now)
     _req_hits[ip] = hits
     with _db() as c:
-        c.execute("INSERT INTO invite_requests(name, email, use_case, note, n_people, status, created) VALUES(?,?,?,?,?,?,?)",
-                  (name, email, use_case, note, n, "new", _now()))
+        c.execute("INSERT INTO invite_requests(name, email, use_case, note, n_people, status, created, survey_ok, interview_ok) "
+                  "VALUES(?,?,?,?,?,?,?,?,?)", (name, email, use_case, note, n, "new", _now(),
+                                                1 if d.get("survey_ok") is True else 0, 1 if d.get("interview_ok") is True else 0))
     return jsonify(ok=True)
 
 
@@ -1177,7 +1222,26 @@ def admin_requests():
         rows = c.execute("""SELECT r.*, i.code FROM invite_requests r LEFT JOIN invites i ON i.id=r.invite_id
             ORDER BY CASE r.status WHEN 'new' THEN 0 ELSE 1 END, r.id DESC""").fetchall()
     return jsonify(ok=True, requests=[{k: r[k] for k in ("id", "name", "email", "use_case", "note", "n_people", "status",
-                                                         "created", "done_at", "code")} for r in rows])
+                                                         "created", "done_at", "code", "survey_ok", "interview_ok")} for r in rows])
+
+
+@bp.route("/board/admin/api/settings", methods=["GET", "POST"])
+@_admin_required
+def admin_settings():
+    if request.method == "POST":
+        d = request.get_json(silent=True) or {}
+        with _db() as c:
+            for k in ("survey_pre", "survey_post"):
+                if k in d:
+                    v = str(d[k] or "").strip()[:1000]
+                    if v and not v.startswith("https://"):
+                        return jsonify(ok=False, error="リンクは https:// で始まるものにしてください"), 400
+                    c.execute("INSERT INTO settings(k, v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", (k, v))
+    with _db() as c:
+        n = {k: c.execute(f"SELECT COUNT(*) FROM users u JOIN invites i ON i.id=u.invite_id WHERE i.source='request' AND u.{col} IS NOT NULL").fetchone()[0]
+             for k, col in (("pre_done", "survey_pre_at"), ("post_done", "survey_post_at"))}
+        n["participants"] = c.execute("SELECT COUNT(*) FROM users u JOIN invites i ON i.id=u.invite_id WHERE i.source='request'").fetchone()[0]
+    return jsonify(ok=True, survey_pre=_setting("survey_pre"), survey_post=_setting("survey_post"), counts=n)
 
 
 @bp.route("/board/admin/api/requests/<int:rid>", methods=["POST"])
@@ -1194,8 +1258,8 @@ def admin_request_action(rid):
                 code = c.execute("SELECT code FROM invites WHERE id=?", (r["invite_id"],)).fetchone()["code"]
                 return jsonify(ok=True, code=code)
             code = _new_code(c)
-            cur = c.execute("INSERT INTO invites(code, memo, max_users, max_min, active, created) VALUES(?,?,?,?,?,?)",
-                            (code, f"申し込み：{r['name']}（{r['use_case'] or '—'}）", min(10, (r["n_people"] or 1) + 2), 300, 1, _now()))
+            cur = c.execute("INSERT INTO invites(code, memo, max_users, max_min, active, created, source) VALUES(?,?,?,?,?,?,?)",
+                            (code, f"申し込み：{r['name']}（{r['use_case'] or '—'}）", min(10, (r["n_people"] or 1) + 2), 300, 1, _now(), "request"))
             c.execute("UPDATE invite_requests SET status='approved', invite_id=?, done_at=? WHERE id=?", (cur.lastrowid, _now(), rid))
             return jsonify(ok=True, code=code)
         if act == "decline":

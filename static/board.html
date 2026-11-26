@@ -136,7 +136,10 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
       <div class="field"><label for="rqNote">ひとこと（任意）</label><textarea id="rqNote" rows="2" maxlength="500"></textarea></div>
       <div style="position:absolute;left:-9999px" aria-hidden="true"><label for="rqWeb">website</label><input type="text" id="rqWeb" tabindex="-1" autocomplete="off"></div>
       <label class="chk"><input type="checkbox" id="rqAdult"> 使う人は全員18歳以上です</label>
-      <p style="font-size:12px;color:var(--sub);line-height:1.6;margin:6px 0 10px">お名前とメールアドレスは、招待コードを送る連絡のためだけに使い、研究のデータには入れません。連絡が終わったら消します。</p>
+      <p class="fbq" style="margin-top:12px">研究へのご協力（できればで大丈夫です）</p>
+      <label class="chk"><input type="checkbox" id="rqSurvey"> 使う前と使ったあとのアンケート（それぞれ5分くらい）に答えられる</label>
+      <label class="chk"><input type="checkbox" id="rqInterview"> 使ってみたあと、Google Meet か Zoom で10〜20分のインタビューに協力できる</label>
+      <p style="font-size:12px;color:var(--sub);line-height:1.6;margin:6px 0 10px">お名前とメールアドレスは、研究者（もこ）からの連絡（招待コード・アンケート・インタビューの日程）のためだけに使い、研究のデータには入れません。連絡が終わったら消します。</p>
       <button type="submit" class="primary" id="rqBtn">申し込む</button>
       <p class="msg" id="rqMsg"></p>
     </form>
@@ -199,6 +202,14 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
   <p class="msg" id="exMsg"></p>
 </div></div>
 
+<!-- アンケート（Googleフォーム）へのご案内 -->
+<div id="svModal" class="modal" hidden><div class="box" role="dialog" aria-modal="true" aria-labelledby="svTitle">
+  <h2 id="svTitle"></h2>
+  <p id="svText" style="font-size:13px;line-height:1.7;margin:0 0 12px"></p>
+  <a id="svLink" class="primary" target="_blank" rel="noopener" style="display:inline-block;padding:6px 14px;border-radius:6px;background:var(--ai);color:var(--onAi);text-decoration:none;font-size:13px">アンケートを開く（別のタブ）</a>
+  <button type="button" id="svDone">答えました</button> <button type="button" id="svLater">あとで</button>
+</div></div>
+
 <!-- 使ってみた感想 -->
 <div id="fbModal" class="modal" hidden><div class="box" role="dialog" aria-modal="true" aria-labelledby="fbTitle">
   <h2 id="fbTitle">使ってみてどうだった？</h2>
@@ -248,6 +259,9 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
       <button type="submit" class="primary">ボードを作る</button>
     </form>
   </div>
+  <div class="box" id="surveyCard" hidden style="margin-top:14px"><h2>アンケートへのご協力のお願い</h2>
+    <p style="font-size:13px;line-height:1.7;margin:0 0 8px">研究のために、使う前と使ったあとにアンケート（それぞれ5分くらい）に答えてもらえると、とても助かります。回答者番号 <b id="pidLabel"></b> はアンケートに自動で入ります。</p>
+    <div id="surveyRows"></div></div>
   <p class="who" id="usageLabel" style="margin:14px 0 0"></p>
   <div class="blist" id="blist"></div>
 </div></div>
@@ -327,11 +341,11 @@ function setMode(s){signupMode=s;$('reqForm').hidden=true;$('authForm').hidden=f
 function showReq(){$('authForm').hidden=true;$('reqForm').hidden=false;['tabLogin','tabSignup'].forEach(i=>$(i).classList.remove('on'));$('tabReq').classList.add('on');$('rqMsg').textContent='';}
 $('tabReq').onclick=showReq;
 $('reqForm').onsubmit=async e=>{e.preventDefault();$('rqMsg').style.color='';
-  const body={name:$('rqName').value,email:$('rqEmail').value,use_case:$('rqUse').value,n_people:$('rqN').value,note:$('rqNote').value,adult:$('rqAdult').checked,website:$('rqWeb').value};
+  const body={name:$('rqName').value,email:$('rqEmail').value,use_case:$('rqUse').value,n_people:$('rqN').value,note:$('rqNote').value,adult:$('rqAdult').checked,website:$('rqWeb').value,survey_ok:$('rqSurvey').checked,interview_ok:$('rqInterview').checked};
   if(!body.adult){$('rqMsg').textContent='いまは、使う人が全員18歳以上の場合だけ使ってもらっています';return;}
   $('rqBtn').disabled=true;const j=await api('/request_invite',{method:'POST',body});$('rqBtn').disabled=false;
   if(!j.ok){$('rqMsg').textContent=j.error||'送れませんでした';return;}
-  $('reqForm').querySelectorAll('input[type=text],textarea').forEach(x=>{if(x.id!=='rqN')x.value='';});$('rqAdult').checked=false;
+  $('reqForm').querySelectorAll('input[type=text],textarea').forEach(x=>{if(x.id!=='rqN')x.value='';});$('rqAdult').checked=false;$('rqSurvey').checked=false;$('rqInterview').checked=false;
   $('rqMsg').style.color='var(--ink)';$('rqMsg').textContent='申し込みました！確認して、招待コードをメールで送ります。少し待っていてください。';};
 $('tabLogin').onclick=()=>setMode(false);$('tabSignup').onclick=()=>setMode(true);
 $('authForm').onsubmit=async e=>{e.preventDefault();$('authBtn').disabled=true;$('authMsg').textContent='';
@@ -344,7 +358,7 @@ function showAuth(){show('authView');setMode(/join=/.test(location.hash));if(loc
 $('logoutBtn').onclick=async()=>{await api('/logout',{method:'POST'});showAuth();};
 
 // ---------- 一覧 ----------
-async function showList(){
+async function showList(){if(SURVEY&&SURVEY.pre&&!SURVEY.pre.done&&!svAsked.pre)setTimeout(()=>openSurvey('pre'),400);
   show('listView');const j=await api('/boards');if(!j.ok)return;
   $('usageLabel').textContent=`今日の録音：${j.usage.used_min}分 ／ 上限 ${j.usage.limit_min}分（あと${j.usage.left_min}分）`;
   const L=$('blist');L.innerHTML='';
@@ -582,7 +596,8 @@ $('backBtn').onclick=()=>{if(RO){location.href='/board/admin';return;}if(rec.on&
   const bid=B&&B.id;
   const leave=async()=>{if(rec.pending){status('最後の1分ぶんの付箋を作っています。少し待ってね…');await rec.queue;}await flush();if(B&&B.id===bid)location.hash='';};
   const ask=B&&!B.fbSent&&(B.recorded||B.rec>0)&&store.get('fbSkip:'+B.id)!=='1';
-  if(ask)openFb(()=>leave(),true);else leave();};
+  const afterFb=()=>{if(B&&(B.recorded||B.rec>0)&&SURVEY&&SURVEY.post&&!SURVEY.post.done&&!svAsked.post)openSurvey('post',leave);else leave();};
+  if(ask)openFb(()=>afterFb(),true);else afterFb();};
 $('shareBtn').onclick=()=>{$('shareUrl').value=location.origin+'/board#join='+B.id+'~'+B.join;$('sharePop').hidden=false;$('shareUrl').select();};
 $('closeShare').onclick=()=>$('sharePop').hidden=true;
 $('copyShare').onclick=async()=>{try{await navigator.clipboard.writeText($('shareUrl').value);$('copyShare').textContent='コピーしました';}catch(e){$('shareUrl').select();$('copyShare').textContent='選択しました（⌘C / Ctrl+Cでコピー）';}};
@@ -734,6 +749,24 @@ $('exGo').onclick=async()=>{const fmtSel=document.querySelector('input[name=exFm
   catch(e){$('exMsg').style.color='';$('exMsg').textContent='書き出せませんでした。ネットにつながっているか確かめて、もう一度試してください';}
   finally{$('exGo').disabled=false;}};
 
+// ---------- 使う前・使ったあとのアンケート（申し込みから来た人だけ） ----------
+let SURVEY=null,svThen=null;const svAsked={};
+const SVTXT={pre:['使う前のアンケートにご協力ください','ボードを使い始める前に、ふだんの話し合いについて5分くらいのアンケートに答えてもらえると助かります。'],
+  post:['使ったあとのアンケートにご協力ください','使ってみてどうだったかを、5分くらいのアンケートで教えてもらえると助かります。']};
+function openSurvey(which,then){if(!SURVEY||!SURVEY[which]||SURVEY[which].done){if(then)then();return;}svThen=then||null;svAsked[which]=true;
+  $('svTitle').textContent=SVTXT[which][0];$('svText').textContent=SVTXT[which][1]+'（回答者番号 '+SURVEY.pid+' はアンケートに自動で入ります）';
+  $('svLink').href=SURVEY[which].url;$('svModal').dataset.which=which;$('svModal').hidden=false;}
+function closeSurvey(){$('svModal').hidden=true;const t=svThen;svThen=null;if(t)t();}
+$('svDone').onclick=async()=>{const w=$('svModal').dataset.which;await api('/survey_done',{method:'POST',body:{which:w}});if(SURVEY&&SURVEY[w])SURVEY[w].done=true;renderSurveyCard();closeSurvey();};
+$('svLater').onclick=closeSurvey;
+function renderSurveyCard(){const c=$('surveyCard');if(!SURVEY){c.hidden=true;return;}c.hidden=false;$('pidLabel').textContent=SURVEY.pid;const box=$('surveyRows');box.innerHTML='';
+  [['pre','使う前のアンケート'],['post','使ったあとのアンケート（ボードを使ってみたあとに）']].forEach(([k,label])=>{if(!SURVEY[k])return;
+    const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0;font-size:13px';
+    const t=document.createElement('span');t.textContent=label+'：'+(SURVEY[k].done?'答えてくれてありがとう！':'まだ');t.style.flex='1';
+    const a=document.createElement('a');a.href=SURVEY[k].url;a.target='_blank';a.rel='noopener';a.textContent='開く';
+    const b=document.createElement('button');b.type='button';b.textContent='答えました';b.hidden=SURVEY[k].done;
+    b.onclick=async()=>{await api('/survey_done',{method:'POST',body:{which:k}});SURVEY[k].done=true;renderSurveyCard();};row.append(t,a,b);box.appendChild(row);});}
+
 // ---------- 使ってみた感想 ----------
 const FB={stars:0,stars_ai:0};
 document.querySelectorAll('.stars').forEach(g=>{for(let i=1;i<=5;i++){const b=document.createElement('button');b.type='button';b.textContent='★';b.setAttribute('role','radio');b.setAttribute('aria-label',i+'つ');
@@ -750,7 +783,7 @@ $('fbSend').onclick=async()=>{const body={stars:FB.stars,stars_ai:FB.stars_ai,go
   $('fbSend').disabled=true;const j=await api('/feedback',{method:'POST',body});
   if(!j.ok){$('fbSend').disabled=false;$('fbMsg').textContent=j.error||'送れませんでした';return;}
   $('fbMsg').style.color='var(--ink)';$('fbMsg').textContent='送りました。ありがとう！';if(B&&!$('boardView').hidden)B.fbSent=true;setTimeout(()=>closeFb(true),1200);};
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(!$('exModal').hidden)$('exModal').hidden=true;if(!$('fbModal').hidden){if(fbThen&&B)store.set('fbSkip:'+B.id,'1');closeFb(false);}if(!$('recModal').hidden)$('recModal').hidden=true;}});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(!$('svModal').hidden)closeSurvey();if(!$('exModal').hidden)$('exModal').hidden=true;if(!$('fbModal').hidden){if(fbThen&&B)store.set('fbSkip:'+B.id,'1');closeFb(false);}if(!$('recModal').hidden)$('recModal').hidden=true;}});
 
 // ---------- 画面の切り替え ----------
 async function route(){
@@ -760,7 +793,7 @@ async function route(){
   META.consent_ver=m.consent_ver||'';META.contact=m.contact||'';
   if(!m.user){showAuth();return;}
   if(m.consent_needed){showConsentView();return;}
-  $('whoLabel').textContent=m.user+' でログイン中';
+  $('whoLabel').textContent=m.user+' でログイン中';SURVEY=m.survey||null;renderSurveyCard();
   const h=location.hash.slice(1);
   if(h.startsWith('join=')){const [id,token]=h.slice(5).split('~');const j=await api('/join',{method:'POST',body:{id,token}});
     if(j.ok){location.hash='b='+j.id;return;}location.hash='';alert(j.error);return;}
