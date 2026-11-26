@@ -64,9 +64,10 @@ textarea{width:100%;font:inherit;font-size:12px;border:1px solid var(--line);bor
 </div>
 
 <div class="box"><h2>保存した音声</h2>
-  <p class="note">録音を始めるときに全員が「音声も保存してよい」と言った録音だけが入っています。ボードの人には見えません。ダウンロードしたら、サーバーからは消しておくとディスクが空きます。</p>
+  <p class="note">録音を始めるときに全員が「音声も保存してよい」と言った録音だけが入っています。ボードの人には見えません。<b>サーバーに置けるのは最長7日</b>で、それより古いファイルは自動で消えます（説明文で約束している期間です）。こまめにダウンロードして手元に保管し、取り出したらサーバーから消してください。</p>
+  <p class="note" id="audioAlert" style="color:var(--stop);font-weight:700"></p>
   <p class="note" id="disk"></p>
-  <div class="tbl"><table><thead><tr><th>ボード</th><th>持ち主</th><th>ファイル</th><th>大きさ</th><th></th></tr></thead><tbody id="alist"></tbody></table></div>
+  <div class="tbl"><table><thead><tr><th>ボード</th><th>持ち主</th><th>ファイル</th><th>大きさ</th><th>取り出し</th><th>自動で消えるまで</th><th></th></tr></thead><tbody id="alist"></tbody></table></div>
 </div>
 
 <div class="box"><h2>連絡文</h2>
@@ -113,10 +114,13 @@ async function load(){const j=await api('/invites');const L=$('list');L.innerHTM
   $('legacy').textContent=(j.legacy_code_on?'共通の招待コード（BOARD_INVITE_CODE）がまだ使える状態です。全員にコードを配り直したら、Render の Environment から消してください。':'共通の招待コードは使えない状態です。')+(j.legacy_users?` 共通コードで登録した人：${j.legacy_users}人`:'');}
 async function loadAudio(){const j=await api('/audio');const L=$('alist');L.innerHTML='';
   $('disk').textContent=`ディスクの空き：${j.disk.free_mb}MB ／ ${j.disk.total_mb}MB（空きが ${j.min_free_mb}MB を切ると音声は保存しません）`;
-  if(!j.boards.length){L.innerHTML='<tr><td colspan="5" class="note">まだありません</td></tr>';return;}
+  const pend=j.boards.filter(a=>a.new_since_download);$('audioAlert').textContent=pend.length?`まだ取り出していない音声があるボード：${pend.length}つ（いちばん早いものは あと${Math.min(...pend.map(a=>a.days_left))}日で消えます）`:'';
+  if(!j.boards.length){L.innerHTML='<tr><td colspan="7" class="note">まだありません</td></tr>';return;}
   j.boards.forEach(a=>{const tr=document.createElement('tr');const td=t=>{const d=document.createElement('td');d.textContent=t;tr.appendChild(d);return d;};
     const t=td(a.title);const sm=document.createElement('div');sm.className='users';sm.textContent=a.updated;t.appendChild(sm);td(a.owner||'—');td(a.files+'本');td(a.mb+'MB');
-    const x=document.createElement('td');const dl=document.createElement('a');dl.href='/board/admin/audio/'+encodeURIComponent(a.board)+'.zip';dl.textContent='ダウンロード';
+    const d=td(a.downloaded?(a.new_since_download?a.downloaded+'（そのあと増えた分は未）':a.downloaded+' 済み'):'まだ');if(a.new_since_download)d.style.color='var(--stop)';
+    const left=td('あと'+a.days_left+'日');if(a.days_left<=2)left.style.color='var(--stop)';
+    const x=document.createElement('td');const dl=document.createElement('a');dl.href='/board/admin/audio/'+encodeURIComponent(a.board)+'.zip';dl.textContent='ダウンロード';dl.onclick=()=>setTimeout(loadAudio,1500);
     const del=document.createElement('button');del.type='button';del.textContent='サーバーから消す';
     del.onclick=async()=>{if(del.dataset.sure!=='1'){del.dataset.sure='1';del.textContent='本当に消す（元に戻せません）';setTimeout(()=>{del.dataset.sure='';del.textContent='サーバーから消す';},4000);return;}
       await fetch('/board/admin/api/audio/'+encodeURIComponent(a.board),{method:'DELETE',headers:{'X-GraRec':'1'},credentials:'same-origin'});loadAudio();};

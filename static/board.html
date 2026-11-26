@@ -167,7 +167,7 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
   <label class="chk"><input type="checkbox" id="rcTold"> 参加者みんなに上のことを伝えた</label>
   <label class="chk"><input type="checkbox" id="rcAgreed"> 全員がいいと言った（ひとりでもいやな人がいたら録音しない）</label>
   <label class="chk"><input type="checkbox" id="rcAdult"> 参加者は全員18歳以上</label>
-  <label class="chk"><input type="checkbox" id="rcAudio"> 音声も保存してよいと全員が言った（ひとりでもいやな人がいたらチェックしない）</label>
+  <label class="chk"><input type="checkbox" id="rcAudio"> 音声も保存してよいと全員が言った（ひとりでもいやな人がいたらチェックしない。サーバーには最長1週間置き、研究者が取り出して保管します）</label>
   <div class="field" style="max-width:180px"><label for="rcN">参加している人数（自分も入れて）</label><input type="text" inputmode="numeric" id="rcN" maxlength="2"></div>
   <button type="button" class="primary" id="rcStart">確かめたので録音を始める</button> <button type="button" id="rcCancel">やめる</button>
   <p class="msg" id="rcMsg"></p>
@@ -194,7 +194,7 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
     <li>AIが書いた付箋と人が書いた付箋、その採用・却下・追加・編集・移動・削除の記録（いつ・ボードのだれが・どの付箋を・どう変えたか）</li>
     <li>ボードを使った日時、録音した長さ、参加した人数</li>
     <li>「感想を送る」から送ってもらった感想（星の数とコメント）</li>
-    <li>録音した音声（録音を始めるときに、その場の全員が「保存してよい」と言ったときだけ。文字起こしの正確さを確かめるためなどに使います）</li>
+    <li>録音した音声（録音を始めるときに、その場の全員が「保存してよい」と言ったときだけ。文字起こしの正確さを確かめるためなどに使います）。音声はこのサーバーには最長1週間だけ置き、その間に研究者が取り出して手元で保管します（1週間たつとサーバーからは自動で消えます）</li>
     <li>ログイン用のID以外に、名前やメールなどの個人情報は集めません</li></ul>
   <h4>使い方</h4><ul>
     <li>付箋の出し方や置き方を分析して、卒業論文・修士論文・学会発表などに使います</li>
@@ -335,7 +335,7 @@ $('autoAdopt').checked=store.get('autoAdopt')!=='0';$('autoAdopt').onchange=()=>
 async function openBoard(id){
   show('boardView');status('読み込み中…');
   const j=await api('/boards/'+id);if(!j.ok){status(j.error||'開けませんでした',true);setTimeout(()=>{location.hash='';},1500);return;}
-  B={id:j.id,title:j.title,agenda:j.agenda||[],ver:j.ver,utts:j.utts||[],rec:j.rec_sec,owner:j.owner,join:j.join_token};
+  B={id:j.id,title:j.title,agenda:j.agenda||[],ver:j.ver,utts:j.utts||[],rec:j.rec_sec,owner:j.owner,join:j.join_token,fbSent:!!j.fb_sent,recorded:false};
   S=Object.assign({objs:{},links:[],tray:[],bands:[]},j.state||{});
   $('title').value=B.title;$('shareBtn').hidden=!B.owner;B.research=j.research_ok;renderResearch();rec.consentId=null;
   if(!RO&&B.agenda.length&&!S.bands.length){B.agenda.forEach(n=>bandOf(n));save();}
@@ -540,7 +540,12 @@ $('arrowBtn').onclick=()=>{arrowMode=!arrowMode;arrowFrom=null;$('arrowBtn').cla
 document.querySelectorAll('[data-color]').forEach(b=>b.onclick=()=>{color=b.dataset.color;let ch=false;
   selSet.forEach(i=>{const o=S.objs[i];if(o&&o.type==='sticky'&&o.color!==color){const bc=o.color;o.color=color;touch(i);logEv('color',i,{color:bc},{color});ch=true;}});if(ch)render();});
 $('title').onchange=()=>{if(RO)return;const t=$('title').value.trim();if(t&&t!==B.title){logEv('title','',{text:B.title},{text:t});B.title=t;save({title:t});}};
-$('backBtn').onclick=()=>{if(RO){location.href='/board/admin';return;}if(rec.on&&!window.confirm('録音を止めて一覧に戻りますか？'))return;stopRec();flush();location.hash='';};
+// 一覧に戻るとき：録音したボードで、まだ感想をもらっていなければ、感想の画面を出してから戻る（「今は送らない」なら、この端末ではもう聞かない）
+$('backBtn').onclick=()=>{if(RO){location.href='/board/admin';return;}if(rec.on&&!window.confirm('録音を止めて一覧に戻りますか？'))return;stopRec(true);
+  const bid=B&&B.id;
+  const leave=async()=>{if(rec.pending){status('最後の1分ぶんの付箋を作っています。少し待ってね…');await rec.queue;}await flush();if(B&&B.id===bid)location.hash='';};
+  const ask=B&&!B.fbSent&&(B.recorded||B.rec>0)&&store.get('fbSkip:'+B.id)!=='1';
+  if(ask)openFb(()=>leave(),true);else leave();};
 $('shareBtn').onclick=()=>{$('shareUrl').value=location.origin+'/board#join='+B.id+'~'+B.join;$('sharePop').hidden=false;$('shareUrl').select();};
 $('closeShare').onclick=()=>$('sharePop').hidden=true;
 $('copyShare').onclick=async()=>{try{await navigator.clipboard.writeText($('shareUrl').value);$('copyShare').textContent='コピーしました';}catch(e){$('shareUrl').select();$('copyShare').textContent='選択しました（⌘C / Ctrl+Cでコピー）';}};
@@ -584,7 +589,7 @@ async function startRec(){
   const mime=pickMime();if(mime===null||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){status('このブラウザでは録音できません。パソコンの Chrome か Safari の最新版で開いてください',true);return;}
   try{rec.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});}
   catch(e){status('マイクを使う許可がありません。アドレスバーの鍵マークからマイクを「許可」にして、もう一度押してください',true);return;}
-  rec.on=true;rec.started=Date.now();rec.base=B.rec||0;rec.mime=mime;segment();logEv('rec_start','',null,{consent_id:rec.consentId});
+  rec.on=true;rec.started=Date.now();rec.base=B.rec||0;B.recorded=true;rec.mime=mime;segment();logEv('rec_start','',null,{consent_id:rec.consentId});
   try{if(navigator.wakeLock)rec.wake=await navigator.wakeLock.request('screen');}catch(e){}
   $('recBtn').textContent='■ 録音を止める';$('recBtn').classList.add('recording');rec.clock=setInterval(recInfo,1000);recInfo();
   document.querySelectorAll('.askfb').forEach(x=>x.remove());status('録音中。1分ごとにAIが付箋を書きます'+(rec.audio?'（音声も研究用に保存しています）':'（音声は保存しません）'));
@@ -628,16 +633,20 @@ window.addEventListener('beforeunload',e=>{if(rec.on||dirty.size||gone.size){flu
 // ---------- 使ってみた感想 ----------
 const FB={stars:0,stars_ai:0};
 document.querySelectorAll('.stars').forEach(g=>{for(let i=1;i<=5;i++){const b=document.createElement('button');b.type='button';b.textContent='★';b.setAttribute('role','radio');b.setAttribute('aria-label',i+'つ');
-  b.onclick=()=>{FB[g.dataset.k]=FB[g.dataset.k]===i?0:i;drawStars();};g.appendChild(b);}});
+  b.onclick=()=>{FB[g.dataset.k]=FB[g.dataset.k]===i?0:i;drawStars();$('fbMsg').textContent='';};g.appendChild(b);}});
 function drawStars(){document.querySelectorAll('.stars').forEach(g=>[...g.children].forEach((b,i)=>{const on=i<FB[g.dataset.k];b.classList.toggle('on',on);b.setAttribute('aria-checked',i+1===FB[g.dataset.k]);}));}
-function openFb(){FB.stars=0;FB.stars_ai=0;drawStars();$('fbGood').value='';$('fbBad').value='';$('fbMsg').textContent='';$('fbMsg').style.color='';$('fbSend').disabled=false;$('fbModal').hidden=false;}
-$('fbBtn').onclick=openFb;$('fbBtn2').onclick=openFb;$('fbCancel').onclick=()=>$('fbModal').hidden=true;
+let fbThen=null;
+function closeFb(sent){$('fbModal').hidden=true;if(sent&&B)B.fbSent=true;const t=fbThen;fbThen=null;if(t)t(sent);}
+function openFb(then,leaving){fbThen=typeof then==='function'?then:null;$('fbCancel').textContent=fbThen?'今は送らない':'閉じる';
+  $('fbTitle').textContent=leaving?'おつかれさまでした！使ってみてどうだった？':'使ってみてどうだった？';FB.stars=0;FB.stars_ai=0;drawStars();$('fbGood').value='';$('fbBad').value='';$('fbMsg').textContent='';$('fbMsg').style.color='';$('fbSend').disabled=false;$('fbModal').hidden=false;}
+['fbGood','fbBad'].forEach(i=>$(i).addEventListener('input',()=>{if($('fbMsg').style.color!=='var(--ink)')$('fbMsg').textContent='';}));
+$('fbBtn').onclick=()=>openFb();$('fbBtn2').onclick=()=>openFb();$('fbCancel').onclick=()=>{if(fbThen&&B)store.set('fbSkip:'+B.id,'1');closeFb(false);};
 $('fbSend').onclick=async()=>{const body={stars:FB.stars,stars_ai:FB.stars_ai,good:$('fbGood').value,bad:$('fbBad').value,board:(B&&!$('boardView').hidden)?B.id:''};
   if(!(body.stars||body.stars_ai||body.good.trim()||body.bad.trim())){$('fbMsg').textContent='星か、ひとことを入れてください';return;}
   $('fbSend').disabled=true;const j=await api('/feedback',{method:'POST',body});
   if(!j.ok){$('fbSend').disabled=false;$('fbMsg').textContent=j.error||'送れませんでした';return;}
-  $('fbMsg').style.color='var(--ink)';$('fbMsg').textContent='送りました。ありがとう！';setTimeout(()=>{$('fbModal').hidden=true;},1200);};
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(!$('fbModal').hidden)$('fbModal').hidden=true;if(!$('recModal').hidden)$('recModal').hidden=true;}});
+  $('fbMsg').style.color='var(--ink)';$('fbMsg').textContent='送りました。ありがとう！';if(B&&!$('boardView').hidden)B.fbSent=true;setTimeout(()=>closeFb(true),1200);};
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(!$('fbModal').hidden){if(fbThen&&B)store.set('fbSkip:'+B.id,'1');closeFb(false);}if(!$('recModal').hidden)$('recModal').hidden=true;}});
 
 // ---------- 画面の切り替え ----------
 async function route(){

@@ -7,7 +7,9 @@ GraRec ボード（/board）：マイクで録音しながら、AIが付箋を�
 - 録音は1分ごとに区切ってサーバーへ送る → whisper-1 で文字起こし → 付箋を作る（研究の live_eval と同じ流れ）
 - 音声は、録音を始めるときに「音声も保存してよい」と全員が同意したときだけ、研究用に保存する（DATA_DIR/board_audio/<ボード>/）。
   同意がなければ文字起こしのあとすぐ消す。保存した音声は管理画面からだけ取り出せる（ボードの人にも見えない）。
-  ボードを消す・「研究に使う」を外すと、そのボードの音声も消す。ディスクの空きが少ないときは保存しない
+  ボードを消す・「研究に使う」を外すと、そのボードの音声も消す。ディスクの空きが少ないときは保存しない。
+  サーバーに置くのは最長7日（AUDIO_KEEP_DAYS）。それより古い音声は自動で消す（6時間ごと＋音声を扱うたびに確かめる）。
+  その前に管理画面から取り出して、研究者の手元で保管する
 - 1人1日あたり・全体で1日あたりの録音時間に上限がある（費用を抑えるため）
 - 研究データとして使う同意を、2段階でとって記録する（consents テーブル）
     1. 登録するとき：アカウントを作る人が、説明（CONSENT_VER の版）を読んで同意し、18歳以上であることを確かめる
@@ -56,7 +58,8 @@ _board_locks = {}
 _locks_guard = threading.Lock()
 _fails = {}   # ログイン失敗の回数（ユーザー名ごと、メモリだけ）
 
-CONSENT_VER = "2026-11-26"   # 説明文（static/board.html の CONSENT）を変えたら、ここの日付も変える
+CONSENT_VER = "2026-11-26.2"   # 説明文（static/board.html の CONSENT）を変えたら、ここの日付も変える
+AUDIO_KEEP_DAYS = 7   # 音声をサーバーに置いておく最長の日数（説明文にも「最長1週間」と書いている）
 CONSENT_MAX_AGE = 12 * 3600   # 録音前の確認は12時間有効（それより後は確認し直す）
 HALLUCINATION = ("ご視聴ありがとうございました", "チャンネル登録", "最後までご視聴", "おやすみなさい")
 WHISPER_HINT = "グループワークの話し合いです。"
@@ -129,6 +132,7 @@ def init_board(app, client, chat_json, data_dir):
         if "research_ok" not in cols:
             c.execute("ALTER TABLE boards ADD COLUMN research_ok INTEGER DEFAULT 1")
     app.register_blueprint(bp)
+    threading.Thread(target=_purge_loop, daemon=True).start()   # 古い音声の片づけ（6時間ごと）
 
 
 def _db():
@@ -369,10 +373,12 @@ def get_board(uid, bid):
         return jsonify(ok=False, error="ボードが見つかりません（消されたか、共有されていません）"), 404
     if request.args.get("v") and str(b["ver"]) == request.args.get("v"):
         return jsonify(ok=True, same=True, ver=b["ver"])
+    with _db() as c:
+        fb_sent = c.execute("SELECT 1 FROM feedback WHERE user=? AND board=? LIMIT 1", (uid, bid)).fetchone() is not None
     return jsonify(ok=True, id=b["id"], title=b["title"], agenda=json.loads(b["agenda"] or "[]"),
                    state=json.loads(b["state"] or "{}"), ver=b["ver"], utts=json.loads(b["utts"] or "[]"),
                    rec_sec=b["rec_sec"] or 0, owner=owner, join_token=b["join_token"] if owner else None,
-                   research_ok=bool(b["research_ok"]))
+                   research_ok=bool(b["research_ok"]), fb_sent=fb_sent)
 
 
 def _admin_required_late(f):
@@ -388,6 +394,36 @@ def _audio_dir(bid):
 
 def _delete_audio(bid):
     shutil.rmtree(_audio_dir(bid), ignore_errors=True)
+
+
+def _purge_old_audio():
+    """サーバーに7日より長く置いた音声を消す（取り出したかどうかにかかわらず）"""
+    root = CFG.get("audio_dir")
+    if not root or not os.path.isdir(root):
+        return
+    limit = time.time() - AUDIO_KEEP_DAYS * 86400
+    for d in os.listdir(root):
+        p = os.path.join(root, d)
+        if not os.path.isdir(p):
+            continue
+        for f in os.listdir(p):
+            fp = os.path.join(p, f)
+            if not f.endswith((".jsonl", ".downloaded")) and os.path.getmtime(fp) < limit:
+                try:
+                    os.remove(fp)
+                except OSError:
+                    pass
+        if not [f for f in os.listdir(p) if not f.endswith((".jsonl", ".downloaded"))]:
+            shutil.rmtree(p, ignore_errors=True)
+
+
+def _purge_loop():
+    while True:
+        try:
+            _purge_old_audio()
+        except Exception:
+            print("board audio purge error:", traceback.format_exc())
+        time.sleep(6 * 3600)
 
 
 def _disk_free():
@@ -775,6 +811,7 @@ def chunk(uid, bid):
             new = _transcribe(path, t0, started)
             saved = None
             try:   # 全員が「音声も保存してよい」と言った録音だけ残す
+                _purge_old_audio()
                 want = bool(json.loads(cr["detail"] or "{}").get("audio")) and bool(b["research_ok"])
                 if want and _disk_free() > CFG["min_free"]:
                     ad = _audio_dir(bid)
@@ -964,6 +1001,7 @@ def admin_update_invite(iid):
 @bp.route("/board/admin/api/audio")
 @_admin_required
 def admin_audio():
+    _purge_old_audio()
     out = []
     root = CFG["audio_dir"]
     with _db() as c:
@@ -973,11 +1011,18 @@ def admin_audio():
             if not files:
                 continue
             size = sum(os.path.getsize(os.path.join(p, f)) for f in files)
+            oldest = min(os.path.getmtime(os.path.join(p, f)) for f in files)
+            newest = max(os.path.getmtime(os.path.join(p, f)) for f in files)
+            dl = os.path.join(p, ".downloaded")
+            dl_at = os.path.getmtime(dl) if os.path.exists(dl) else None
             b = c.execute("SELECT b.title, b.updated, u.username FROM boards b LEFT JOIN users u ON u.id=b.owner WHERE b.id=?", (d,)).fetchone()
             out.append({"board": d, "title": b["title"] if b else "（消されたボード）", "owner": b["username"] if b else "",
-                        "updated": b["updated"] if b else "", "files": len(files), "mb": round(size / 1024 / 1024, 1)})
+                        "updated": b["updated"] if b else "", "files": len(files), "mb": round(size / 1024 / 1024, 1),
+                        "days_left": round(max(0, AUDIO_KEEP_DAYS - (time.time() - oldest) / 86400), 1),
+                        "new_since_download": dl_at is None or newest > dl_at,
+                        "downloaded": datetime.fromtimestamp(dl_at, JST).strftime("%m/%d %H:%M") if dl_at else None})
     du = shutil.disk_usage(CFG["data_dir"])
-    return jsonify(ok=True, boards=out, disk={"free_mb": round(du.free / 1024 / 1024), "total_mb": round(du.total / 1024 / 1024)},
+    return jsonify(ok=True, boards=out, keep_days=AUDIO_KEEP_DAYS, disk={"free_mb": round(du.free / 1024 / 1024), "total_mb": round(du.total / 1024 / 1024)},
                    min_free_mb=round(CFG["min_free"] / 1024 / 1024))
 
 
@@ -990,8 +1035,10 @@ def admin_audio_zip(bid):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
         for f in sorted(os.listdir(p)):
-            z.write(os.path.join(p, f), f)
+            if not f.endswith(".downloaded"):
+                z.write(os.path.join(p, f), f)
     buf.seek(0)
+    open(os.path.join(p, ".downloaded"), "w").write(_now())   # いつ取り出したかの印（管理画面で「まだ取り出していない分」を出すため）
     return send_file(buf, mimetype="application/zip", as_attachment=True, download_name=f"board_audio_{bid}.zip")
 
 
