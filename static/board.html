@@ -80,14 +80,22 @@ input[type=text],input[type=password],textarea{width:100%;border:1px solid var(-
 .text{font-size:13px;color:var(--sub);padding:2px 4px;white-space:nowrap;cursor:move}
 svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
 #links line{stroke:var(--arrow)}#links marker path{fill:var(--arrow)}
-.side{width:320px;border-left:1px solid var(--line);background:var(--paper);display:flex;flex-direction:column;min-height:0}
+.side{width:320px;border-left:1px solid var(--line);background:var(--paper);display:flex;flex-direction:column;min-height:0;overflow-y:auto}
 .side section{padding:10px 12px;border-bottom:1px solid var(--line)}
 .side h3{font-size:13px;margin:0 0 6px}
-#talkSec.open{flex:1;display:flex;flex-direction:column;min-height:0}
+#talkSec.open{flex:1;display:flex;flex-direction:column;min-height:240px}
+#srcBody{max-height:180px;overflow:auto}
 #talkBtn{width:100%;text-align:left}
 #talk{flex:1;overflow:auto;font-size:12px;line-height:1.55;margin-top:8px}
 #talk p{margin:0 0 6px}
 #talk .tm{color:var(--sub);margin-right:4px;font-variant-numeric:tabular-nums}
+#talk p.now{background:var(--note);border-left:3px solid var(--accent);padding-left:6px;margin-left:-9px}
+#talk p.src{background:rgba(47,111,222,.10);border-left:3px solid var(--ai);padding-left:6px;margin-left:-9px}
+#boardView.replaying #talk p{cursor:pointer}
+#rpSay{font-size:13px;flex-basis:100%;line-height:1.6}
+#rpSay b{color:var(--accent);margin-right:4px}
+#srcSec{font-size:12px;line-height:1.6}
+#srcSec p{margin:0 0 4px}
 #tray{max-height:140px;overflow:auto;font-size:12px}
 #tray div{display:flex;justify-content:space-between;gap:6px;padding:3px 0;border-bottom:1px dotted var(--line)}
 #tray button{padding:1px 6px;font-size:11px}
@@ -280,6 +288,7 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
     <button type="button" id="rpPlay">▶ 再生</button><select id="rpSpeed" aria-label="再生の速さ"><option value="10">×10</option><option value="30" selected>×30</option><option value="60">×60</option></select>
     <input type="range" id="rpSlider" aria-label="振り返る時刻"><span id="rpClock"></span>
     <button type="button" id="rpExit">振り返りを終わる</button>
+    <div id="rpSay"></div>
     <div id="rpWhat"></div>
   </div>
   <div id="sharePop" hidden>
@@ -292,9 +301,10 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
     <div class="side">
       <section><div id="status"></div></section>
       <section id="researchRow"></section>
+      <section id="srcSec" hidden><h3>この付箋のもとになった会話 <span id="srcTime" style="font-weight:400;color:var(--sub)"></span></h3><div id="srcBody"></div></section>
       <section id="talkSec"><div id="talkRow"><button type="button" id="talkBtn" aria-expanded="false" aria-controls="talk">会話（文字起こし）を開く</button><button type="button" id="wideBtn" hidden>広げる</button></div><div id="talk" hidden></div></section>
       <section><h3>却下した付箋 <span id="trayN"></span></h3><div id="tray"></div></section>
-      <section><h3>使い方</h3><ul class="help">
+      <section><details id="helpBox"><summary style="font-size:13px;font-weight:700;cursor:pointer">使い方</summary><ul class="help" style="margin-top:6px">
         <li>「録音を始める」で、1分ごとにAIが付箋を書いて置きます（最初の付箋は1分ちょっと後）</li>
         <li>青い点線はAIの候補。✓で採用、✕で却下。動かすと採用になります</li>
         <li>ダブルクリック（スマホはダブルタップ）で文字を入力。Deleteで削除</li>
@@ -302,7 +312,7 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
         <li>ボードを動かす：スペースを押しながらドラッグ、右下の「✋ 移動」、2本指スクロール。拡大縮小：ピンチ・ホイール・＋−</li>
         <li>録音するのは1台だけにして、ほかの人は「共有」のリンクから見てください</li>
         <li>Zoom などオンラインで話すときは、録音を始めるときに「マイク＋オンラインの相手の声」を選び、共有する画面で「音声も共有」をオンに（イヤホンのままでOK）</li>
-        <li>「振り返り」で、時間を戻してその時点のボードと会話を見られます</li></ul></section>
+        <li>「振り返り」で、時間を戻してその時点のボードと会話を見られます。会話をクリックするとその時点へ、AIの付箋をクリックするともとになった会話が出ます</li></ul></details></section>
     </div>
   </div>
 </div>
@@ -493,11 +503,22 @@ $('wideBtn').onclick=()=>{const w=!document.querySelector('.side').classList.con
 function setTalk(open){$('talk').hidden=!open;$('wideBtn').hidden=!open;if(!open){document.querySelector('.side').classList.remove('wide');$('wideBtn').textContent='広げる';}$('talkSec').classList.toggle('open',open);$('talkBtn').setAttribute('aria-expanded',open);
   $('talkBtn').textContent=open?'会話（文字起こし）を閉じる':'会話（文字起こし）を開く';store.set('talkOpen',open?'1':'0');if(open){lastTalk=-1;if(B)renderTalk();}}
 $('talkBtn').onclick=()=>setTalk($('talk').hidden);
-function renderTalk(){if($('talk').hidden)return;const u=RP?B.utts.filter(x=>x.ms&&x.ms<=RP.T):B.utts;const key=RP?-1-u.length:u.length;if(key===lastTalk)return;lastTalk=key;const box=$('talk');const keepTop=box.scrollTop;box.innerHTML='';box.scrollTop=keepTop;
+function renderTalk(){if($('talk').hidden)return;const u=RP?B.utts.filter(x=>x.ms&&x.ms<=RP.T):B.utts;const key=(RP?-1-u.length:u.length)+'|'+(SRC?SRC.join(','):'');if(key===lastTalk)return;lastTalk=key;const box=$('talk');const keepTop=box.scrollTop;box.innerHTML='';box.scrollTop=keepTop;
   if(!u.length){box.innerHTML='<p style="color:var(--sub)">録音を始めると、ここに文字起こしが出ます。</p>';return;}
   const atEnd=box.dataset.n===undefined||box.scrollHeight-box.scrollTop-box.clientHeight<60;
-  u.forEach(x=>{const p=document.createElement('p');const tm=document.createElement('span');tm.className='tm';tm.textContent=fmt(x.t);p.append(tm);if(x.who&&x.who!=='話者'){const w=document.createElement('b');w.textContent=x.who+'：';w.style.marginRight='2px';w.style.color=x.who==='相手'?'var(--ai)':'var(--accent)';p.append(w);}p.append(document.createTextNode(x.text));box.appendChild(p);});
-  box.dataset.n=u.length;if(atEnd||RP)box.scrollTop=box.scrollHeight;}
+  const nowFrom=RP&&u.length?u[u.length-1].t-20:null;
+  u.forEach(x=>{const p=document.createElement('p');if(RP&&x.t>=nowFrom)p.className='now';if(SRC&&x.t>SRC[0]&&x.t<=SRC[1])p.className='src';
+    if(RP&&x.ms)p.onclick=()=>{$('rpSlider').value=x.ms+1000;showAt(x.ms+1000);};const tm=document.createElement('span');tm.className='tm';tm.textContent=fmt(x.t);p.append(tm);if(x.who&&x.who!=='話者'){const w=document.createElement('b');w.textContent=x.who+'：';w.style.marginRight='2px';w.style.color=x.who==='相手'?'var(--ai)':'var(--accent)';p.append(w);}p.append(document.createTextNode(x.text));box.appendChild(p);});
+  box.dataset.n=u.length;const hit=box.querySelector('p.src');if(hit&&!RP)hit.scrollIntoView({block:'center'});else if(atEnd||RP)box.scrollTop=box.scrollHeight;}
+// 付箋をえらぶと、そのもとになった会話（その付箋が出る直前の約1分）を出す
+let SRC=null;const secOf=t=>{const m=String(t||'').match(/^(\d+):(\d{2})$/);return m?(+m[1])*60+(+m[2]):null;};
+function showSource(id){const o=id&&S&&S.objs[id];const sec=o&&o.ai?secOf(o.time):null;
+  if(sec==null){SRC=null;$('srcSec').hidden=true;lastTalk=-3;renderTalk();return;}
+  SRC=[sec-75,sec];const us=B.utts.filter(x=>x.t>SRC[0]&&x.t<=SRC[1]);$('srcTime').textContent=`（${fmt(Math.max(0,SRC[0]))}〜${fmt(sec)}）`;
+  const box=$('srcBody');box.innerHTML='';if(!us.length){box.textContent='この時間の文字起こしはありません';}
+  us.forEach(x=>{const p=document.createElement('p');const tm=document.createElement('span');tm.className='tm';tm.style.color='var(--sub)';tm.style.marginRight='4px';tm.textContent=fmt(x.t);p.append(tm);
+    if(x.who&&x.who!=='話者'){const w=document.createElement('b');w.textContent=x.who+'：';p.append(w);}p.append(document.createTextNode(x.text));box.appendChild(p);});
+  $('srcSec').hidden=false;lastTalk=-3;renderTalk();}
 function status(t,err){$('status').textContent=t||'';$('status').classList.toggle('err',!!err);}
 
 // ---------- 操作 ----------
@@ -515,7 +536,7 @@ function edit(id){if(RP||RO||editing)return;const o=S.objs[id];if(!o)return;cons
 // マウス：背景をドラッグ＝範囲選択（Shiftで追加）／スペースを押しながら・✋オン・ホイールのボタンでドラッグ＝ボードを動かす
 // タッチ：1本指＝ボードを動かす／2本指＝ピンチで拡大縮小／付箋を押さえて動かす
 let lastTap={},spaceDown=false,panMode=false;const ptrs=new Map();let pinch=null;
-function setSel(ids){selSet=new Set(ids);world.querySelectorAll('.obj').forEach(e=>e.classList.toggle('sel',selSet.has(e.dataset.id)));}
+function setSel(ids){selSet=new Set(ids);world.querySelectorAll('.obj').forEach(e=>e.classList.toggle('sel',selSet.has(e.dataset.id)));showSource(selSet.size===1?[...selSet][0]:null);}
 function startPan(ev){drag={pan:true,sx:ev.clientX,sy:ev.clientY,vx:view.x,vy:view.y};stage.classList.add('panning');}
 stage.addEventListener('pointerdown',ev=>{
   if(ev.target.closest('#editor,.zoom,.acts,button'))return;
@@ -525,6 +546,7 @@ stage.addEventListener('pointerdown',ev=>{
     pinch={d:Math.hypot(p1.x-p2.x,p1.y-p2.y),mx:(p1.x+p2.x)/2,my:(p1.y+p2.y)/2,v:{...view}};return;}
   if(ptrs.size>2)return;
   try{stage.setPointerCapture(ev.pointerId);}catch(e){}
+  if(RP||RO){const c=ev.target.closest('.obj');if(c)setSel([c.dataset.id]);}
   const el=(RP||RO)?null:ev.target.closest('.obj');
   if(el&&!(spaceDown||panMode||ev.button===1)){const id=el.dataset.id,o=S.objs[id];if(!o)return;
     if(arrowMode){if(!arrowFrom){arrowFrom=id;setSel([id]);}else if(arrowFrom!==id){S.links.push({from:arrowFrom,to:id});logEv('link','',null,{from:arrowFrom,to:id});arrowFrom=null;arrowMode=false;$('arrowBtn').classList.remove('on');stage.classList.remove('arrowmode');render();save();}return;}
@@ -536,7 +558,7 @@ stage.addEventListener('pointerdown',ev=>{
     const starts={};selSet.forEach(i=>{const x=S.objs[i];if(x)starts[i]={x:x.x,y:x.y};});
     drag={ids:Object.keys(starts),starts,sx:ev.clientX,sy:ev.clientY,moved:false};return;}
   // 背景
-  if(RP||RO||ev.pointerType!=='mouse'||spaceDown||panMode||ev.button===1){if(!ev.shiftKey&&!spaceDown&&!panMode&&ev.button!==1)setSel([]);startPan(ev);return;}
+  if(RP||RO||ev.pointerType!=='mouse'||spaceDown||panMode||ev.button===1){if(!ev.shiftKey&&!spaceDown&&!panMode&&ev.button!==1&&!ev.target.closest('.obj'))setSel([]);startPan(ev);return;}
   const r=stage.getBoundingClientRect();const m=document.createElement('div');m.id='marquee';stage.appendChild(m);
   drag={box:true,x0:ev.clientX-r.left,y0:ev.clientY-r.top,add:ev.shiftKey?new Set(selSet):new Set(),m};
   Object.assign(m.style,{left:drag.x0+'px',top:drag.y0+'px',width:'0px',height:'0px'});if(!ev.shiftKey)setSel([]);});
@@ -620,14 +642,18 @@ function showAt(T){RP.T=T;const {st,last}=buildAt(T);S=st;relayout(S);render();
   world.querySelectorAll('.obj.last').forEach(e=>e.classList.remove('last'));
   if(last&&last.obj){const el=world.querySelector(`[data-id="${CSS.escape(last.obj)}"]`);if(el)el.classList.add('last');}
   const rt=last&&last.rec_t!=null?` ・ 録音 ${fmt(last.rec_t)}`:'';$('rpClock').textContent=clock(T)+rt;
+  const said=B.utts.filter(x=>x.ms&&x.ms<=T&&T-x.ms<90000).slice(-2);const sy=$('rpSay');sy.innerHTML='';
+  if(said.length){const h=document.createElement('b');h.textContent='このとき話していたこと';sy.append(h);said.forEach((x,i)=>{sy.append(document.createTextNode((i?' ／ ':'')+(x.who&&x.who!=='話者'?x.who+'：':'')+'「'+x.text.slice(0,80)+(x.text.length>80?'…':'')+'」'));});}
+  if(SRC&&!selSet.size){SRC=null;$('srcSec').hidden=true;}
   $('rpWhat').textContent=last?`直前の操作：${LABEL[last.type]||last.type}`+(last.who?`（${last.who}）`:'')+(last.after&&last.after.text?`「${String(last.after.text).slice(0,30)}」`:''):'まだ何もありません';}
 async function startReplay(){if(rec.on){status('録音中は振り返りできません。録音を止めてからどうぞ',true);return;}
   await flush();const j=await api('/boards/'+B.id+'/events');if(!j.ok){status(j.error||'記録を読めませんでした',true);return;}
   const evs=j.events.filter(e=>e.ms);if(!evs.length){status('まだ操作の記録がありません（この機能を入れる前のボードには記録がありません）',true);return;}
   RP={evs,live:S,T:0,timer:null};const t0=Math.min(evs[0].ms,...B.utts.filter(u=>u.ms).map(u=>u.ms)),t1=evs[evs.length-1].ms;
   const sl=$('rpSlider');sl.min=t0-1000;sl.max=t1+1000;sl.step=1000;sl.value=sl.max;
+  RP.talkWas=!$('talk').hidden;if(!RP.talkWas)setTalk(true);store.set('talkOpen',RP.talkWas?'1':'0');
   $('boardView').classList.add('replaying');$('replayBar').hidden=false;$('replayBtn').classList.add('on');selSet.clear();showAt(+sl.value);fit();}
-function endReplay(){if(!RP)return;clearInterval(RP.timer);S=RP.live;RP=null;lastTalk=-2;$('boardView').classList.remove('replaying');$('replayBar').hidden=true;$('replayBtn').classList.remove('on');$('rpPlay').textContent='▶ 再生';render();B.ver=-1;poll();}
+function endReplay(){if(!RP)return;clearInterval(RP.timer);if(!RP.talkWas)setTalk(false);SRC=null;$('srcSec').hidden=true;selSet.clear();S=RP.live;RP=null;lastTalk=-2;$('boardView').classList.remove('replaying');$('replayBar').hidden=true;$('replayBtn').classList.remove('on');$('rpPlay').textContent='▶ 再生';render();B.ver=-1;poll();}
 $('replayBtn').onclick=()=>RP?endReplay():startReplay();$('rpExit').onclick=endReplay;
 $('rpSlider').oninput=()=>showAt(+$('rpSlider').value);
 $('rpPlay').onclick=()=>{if(!RP)return;if(RP.timer){clearInterval(RP.timer);RP.timer=null;$('rpPlay').textContent='▶ 再生';return;}
