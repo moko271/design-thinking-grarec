@@ -167,6 +167,9 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
   <label class="chk"><input type="checkbox" id="rcTold"> 参加者みんなに上のことを伝えた</label>
   <label class="chk"><input type="checkbox" id="rcAgreed"> 全員がいいと言った（ひとりでもいやな人がいたら録音しない）</label>
   <label class="chk"><input type="checkbox" id="rcAdult"> 参加者は全員18歳以上</label>
+  <div class="field" style="margin-top:8px"><label>録る音</label>
+    <label class="chk"><input type="radio" name="rcSrc" value="mic" checked> マイクだけ（対面で話すとき）</label>
+    <label class="chk"><input type="radio" name="rcSrc" value="online"> マイク＋Zoomなどオンラインの相手の声（イヤホンのままでOK。次に出る画面で Zoom のウィンドウか画面全体を選び、「音声も共有」をオンにしてください）</label></div>
   <label class="chk"><input type="checkbox" id="rcAudio"> 音声も保存してよいと全員が言った（ひとりでもいやな人がいたらチェックしない。サーバーには最長1週間置き、研究者が取り出して保管します）</label>
   <div class="field" style="max-width:180px"><label for="rcN">参加している人数（自分も入れて）</label><input type="text" inputmode="numeric" id="rcN" maxlength="2"></div>
   <button type="button" class="primary" id="rcStart">確かめたので録音を始める</button> <button type="button" id="rcCancel">やめる</button>
@@ -260,6 +263,7 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
         <li>背景をドラッグで範囲選択（Shiftで追加、⌘/Ctrl+Aで全部）。選んだ付箋はまとめて動かせます</li>
         <li>ボードを動かす：スペースを押しながらドラッグ、右下の「✋ 移動」、2本指スクロール。拡大縮小：ピンチ・ホイール・＋−</li>
         <li>録音するのは1台だけにして、ほかの人は「共有」のリンクから見てください</li>
+        <li>Zoom などオンラインで話すときは、録音を始めるときに「マイク＋オンラインの相手の声」を選び、共有する画面で「音声も共有」をオンに（イヤホンのままでOK）</li>
         <li>「振り返り」で、時間を戻してその時点のボードと会話を見られます</li></ul></section>
     </div>
   </div>
@@ -445,7 +449,7 @@ $('talkBtn').onclick=()=>setTalk($('talk').hidden);
 function renderTalk(){if($('talk').hidden)return;const u=RP?B.utts.filter(x=>x.ms&&x.ms<=RP.T):B.utts;const key=RP?-1-u.length:u.length;if(key===lastTalk)return;lastTalk=key;const box=$('talk');const keepTop=box.scrollTop;box.innerHTML='';box.scrollTop=keepTop;
   if(!u.length){box.innerHTML='<p style="color:var(--sub)">録音を始めると、ここに文字起こしが出ます。</p>';return;}
   const atEnd=box.dataset.n===undefined||box.scrollHeight-box.scrollTop-box.clientHeight<60;
-  u.forEach(x=>{const p=document.createElement('p');const tm=document.createElement('span');tm.className='tm';tm.textContent=fmt(x.t);p.append(tm,document.createTextNode(x.text));box.appendChild(p);});
+  u.forEach(x=>{const p=document.createElement('p');const tm=document.createElement('span');tm.className='tm';tm.textContent=fmt(x.t);p.append(tm);if(x.who&&x.who!=='話者'){const w=document.createElement('b');w.textContent=x.who+'：';w.style.marginRight='2px';w.style.color=x.who==='相手'?'var(--ai)':'var(--accent)';p.append(w);}p.append(document.createTextNode(x.text));box.appendChild(p);});
   box.dataset.n=u.length;if(atEnd||RP)box.scrollTop=box.scrollHeight;}
 function status(t,err){$('status').textContent=t||'';$('status').classList.toggle('err',!!err);}
 
@@ -592,16 +596,22 @@ async function startRec(){
   rec.on=true;rec.started=Date.now();rec.base=B.rec||0;B.recorded=true;rec.mime=mime;segment();logEv('rec_start','',null,{consent_id:rec.consentId});
   try{if(navigator.wakeLock)rec.wake=await navigator.wakeLock.request('screen');}catch(e){}
   $('recBtn').textContent='■ 録音を止める';$('recBtn').classList.add('recording');rec.clock=setInterval(recInfo,1000);recInfo();
-  document.querySelectorAll('.askfb').forEach(x=>x.remove());status('録音中。1分ごとにAIが付箋を書きます'+(rec.audio?'（音声も研究用に保存しています）':'（音声は保存しません）'));
+  document.querySelectorAll('.askfb').forEach(x=>x.remove());status('録音中。1分ごとにAIが付箋を書きます'+(rec.remote?'（マイク＝こちら／画面の音＝相手）':'')+(rec.audio?'（音声も研究用に保存しています）':'（音声は保存しません）'));
 }
-function segment(){if(!rec.on)return;
-  const mr=new MediaRecorder(rec.stream,rec.mime?{mimeType:rec.mime}:undefined);const parts=[];const t=Date.now();
-  mr.ondataavailable=e=>{if(e.data&&e.data.size)parts.push(e.data);};
-  mr.onstop=()=>{const dur=(Date.now()-t)/1000;if(dur<3)return;const blob=new Blob(parts,{type:mr.mimeType||rec.mime||'audio/webm'});rec.pending++;recInfo();rec.queue=rec.queue.then(()=>upload(blob,dur,t)).finally(()=>{rec.pending--;recInfo();});};
-  mr.start();rec.mr=mr;rec.segTimer=setTimeout(()=>{if(mr.state!=='inactive')mr.stop();segment();},SEG_MS);}
+// 1分ごとに区切る。オンラインのときは「マイク（こちら）」と「画面の音（相手）」を別々に録って一緒に送る
+function recorderOf(stream){const mr=new MediaRecorder(stream,rec.mime?{mimeType:rec.mime}:undefined);const parts=[];
+  const done=new Promise(res=>{mr.onstop=()=>res(new Blob(parts,{type:mr.mimeType||rec.mime||'audio/webm'}));});
+  mr.ondataavailable=e=>{if(e.data&&e.data.size)parts.push(e.data);};mr.start();return {mr,done};}
+function segment(){if(!rec.on)return;const t=Date.now();
+  const a=recorderOf(rec.stream);let r2=null;
+  if(rec.remote&&rec.remote.getAudioTracks().some(x=>x.readyState==='live')){try{r2=recorderOf(rec.remote);}catch(e){r2=null;}}
+  rec.mr=a.mr;rec.mr2=r2&&r2.mr;
+  Promise.all([a.done,r2?r2.done:Promise.resolve(null)]).then(([blob,blob2])=>{const dur=(Date.now()-t)/1000;if(dur<3)return;
+    rec.pending++;recInfo();rec.queue=rec.queue.then(()=>upload(blob,dur,t,blob2)).finally(()=>{rec.pending--;recInfo();});});
+  rec.segTimer=setTimeout(()=>{[a.mr,r2&&r2.mr].forEach(m=>{if(m&&m.state!=='inactive')m.stop();});segment();},SEG_MS);}
 function stopRec(silent){if(!rec.on)return;logEv('rec_stop','',null,{sec:Math.round((Date.now()-rec.started)/1000)});rec.on=false;clearTimeout(rec.segTimer);clearInterval(rec.clock);
-  try{if(rec.mr&&rec.mr.state!=='inactive')rec.mr.stop();}catch(e){}
-  setTimeout(()=>{if(rec.stream)rec.stream.getTracks().forEach(t=>t.stop());rec.stream=null;},300);
+  [rec.mr,rec.mr2].forEach(m=>{try{if(m&&m.state!=='inactive')m.stop();}catch(e){}});
+  setTimeout(()=>{[rec.stream,rec.remote].forEach(s=>{if(s)s.getTracks().forEach(t=>t.stop());});rec.stream=null;rec.remote=null;},300);
   try{rec.wake&&rec.wake.release();}catch(e){}rec.wake=null;
   $('recBtn').textContent='● 録音を始める';$('recBtn').classList.remove('recording');recInfo();if(!silent){status('録音を止めました。最後の1分ぶんの付箋を作っています…');askFb();}}
 function askFb(){const st=document.getElementById('status').parentElement;if(st.querySelector('.askfb'))return;const b=document.createElement('button');b.type='button';b.className='askfb';
@@ -609,9 +619,9 @@ function askFb(){const st=document.getElementById('status').parentElement;if(st.
 function recInfo(){const s=rec.on?Math.floor((Date.now()-rec.started)/1000):0;
   $('recInfo').innerHTML='';if(rec.on){const d=document.createElement('span');d.className='dot';$('recInfo').append(d,document.createTextNode(fmt(s)));}
   if(rec.pending)$('recInfo').append(document.createTextNode((rec.on?' ・ ':'')+'AIが考え中…'));}
-async function upload(blob,dur,startedMs){
+async function upload(blob,dur,startedMs,blob2){
   const bid=B&&B.id;if(!bid)return;
-  const ext=/mp4/.test(blob.type)?'.mp4':/ogg/.test(blob.type)?'.ogg':'.webm';const fd=new FormData();fd.append('audio',blob,'chunk'+ext);fd.append('dur',String(Math.round(dur)));fd.append('consent_id',String(rec.consentId||''));fd.append('started_ms',String(startedMs||''));
+  const ext=/mp4/.test(blob.type)?'.mp4':/ogg/.test(blob.type)?'.ogg':'.webm';const fd=new FormData();fd.append('audio',blob,'chunk'+ext);if(blob2&&blob2.size)fd.append('audio2',blob2,'remote'+ext);fd.append('dur',String(Math.round(dur)));fd.append('consent_id',String(rec.consentId||''));fd.append('started_ms',String(startedMs||''));
   const j=await api('/boards/'+bid+'/chunk',{method:'POST',body:fd});
   if(!B||B.id!==bid)return;
   if(!j.ok){status(j.error||'文字起こしに失敗しました',true);if(j.limit||j.need_consent)stopRec(true);return;}
@@ -625,8 +635,16 @@ $('rcCancel').onclick=()=>$('recModal').hidden=true;
 $('rcStart').onclick=async()=>{const n=parseInt($('rcN').value.replace(/[０-９]/g,d=>String.fromCharCode(d.charCodeAt(0)-0xFEE0)),10);
   if(!($('rcTold').checked&&$('rcAgreed').checked&&$('rcAdult').checked)){$('rcMsg').textContent='3つとも確かめてから始めてください';return;}
   if(!(n>=1&&n<=50)){$('rcMsg').textContent='参加している人数を数字で入れてください';return;}
+  const online=document.querySelector('input[name=rcSrc]:checked').value==='online';rec.remote=null;
+  if(online){   // 押した直後に画面の共有を選んでもらう（ブラウザの決まりで、ボタンを押した流れの中でしか出せない）
+    try{const ds=await navigator.mediaDevices.getDisplayMedia({video:true,audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},systemAudio:'include',selfBrowserSurface:'exclude',surfaceSwitching:'include'});
+      ds.getVideoTracks().forEach(t=>t.stop());   // 画面の映像はいらない（音だけ使う）
+      if(!ds.getAudioTracks().length){$('rcMsg').textContent='相手の声が取れませんでした。もう一度押して、選ぶ画面で「音声も共有」（システム音声・タブの音声）をオンにしてください。Zoom アプリの声を取るには Mac は macOS 14.2 以上・Chrome 141 以上が必要です';return;}
+      rec.remote=new MediaStream(ds.getAudioTracks());
+      ds.getAudioTracks()[0].addEventListener('ended',()=>{if(rec.on){rec.remote=null;status('画面の共有が止まったので、ここからはマイクの声だけを録っています',true);}});}
+    catch(e){$('rcMsg').textContent='画面の共有が選ばれませんでした。オンラインの相手の声を録るには、共有する画面を選んで「音声も共有」をオンにしてください';return;}}
   $('rcStart').disabled=true;const j=await api('/boards/'+B.id+'/record_consent',{method:'POST',body:{told:true,agreed:true,adult:true,n_people:n,audio:$('rcAudio').checked}});$('rcStart').disabled=false;
-  if(!j.ok){$('rcMsg').textContent=j.error;return;}rec.consentId=j.consent_id;rec.audio=!!j.audio;$('recModal').hidden=true;startRec();};
+  if(!j.ok){$('rcMsg').textContent=j.error;if(rec.remote){rec.remote.getTracks().forEach(t=>t.stop());rec.remote=null;}return;}rec.consentId=j.consent_id;rec.audio=!!j.audio;$('recModal').hidden=true;startRec();};
 $('recBtn').onclick=()=>RP?null:(rec.on?stopRec():openRecModal());
 window.addEventListener('beforeunload',e=>{if(rec.on||dirty.size||gone.size){flush();e.preventDefault();e.returnValue='';}});
 
