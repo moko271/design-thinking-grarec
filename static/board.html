@@ -126,7 +126,20 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
   <h1>GraRec ボード</h1>
   <p class="lead">話し合いを録音すると、AIが1分ごとに会話を聞いて付箋を書き、話題ごとに並べていくボードです。人も付箋を足したり動かしたりできます。</p>
   <div class="box">
-    <div class="tabs"><button type="button" id="tabLogin" class="on">ログイン</button><button type="button" id="tabSignup">新しく登録</button></div>
+    <div class="tabs"><button type="button" id="tabLogin" class="on">ログイン</button><button type="button" id="tabSignup">新しく登録</button><button type="button" id="tabReq">招待コードをもらう</button></div>
+    <form id="reqForm" hidden>
+      <p style="font-size:13px;line-height:1.7;margin:0 0 12px">使ってみたい人は、ここから申し込んでください。研究者（もこ）が確認して、招待コードをメールで送ります。</p>
+      <div class="field"><label for="rqName">お名前（ニックネームでOK）</label><input type="text" id="rqName" maxlength="40" autocomplete="nickname"></div>
+      <div class="field"><label for="rqEmail">連絡先のメールアドレス（招待コードを送ります）</label><input type="text" id="rqEmail" maxlength="120" inputmode="email" autocomplete="email"></div>
+      <div class="field"><label for="rqUse">どんな場面で使いたい？</label><select id="rqUse"><option>授業のグループワーク</option><option>ゼミ・研究室</option><option>自分の研究の壁打ち</option><option>サークル・団体の話し合い</option><option>仕事の会議</option><option>その他</option></select></div>
+      <div class="field" style="max-width:220px"><label for="rqN">いっしょに使うだいたいの人数</label><input type="text" id="rqN" inputmode="numeric" maxlength="2" value="1"></div>
+      <div class="field"><label for="rqNote">ひとこと（任意）</label><textarea id="rqNote" rows="2" maxlength="500"></textarea></div>
+      <div style="position:absolute;left:-9999px" aria-hidden="true"><label for="rqWeb">website</label><input type="text" id="rqWeb" tabindex="-1" autocomplete="off"></div>
+      <label class="chk"><input type="checkbox" id="rqAdult"> 使う人は全員18歳以上です</label>
+      <p style="font-size:12px;color:var(--sub);line-height:1.6;margin:6px 0 10px">お名前とメールアドレスは、招待コードを送る連絡のためだけに使い、研究のデータには入れません。連絡が終わったら消します。</p>
+      <button type="submit" class="primary" id="rqBtn">申し込む</button>
+      <p class="msg" id="rqMsg"></p>
+    </form>
     <form id="authForm" autocomplete="on">
       <div class="field" id="codeField" hidden><label for="code">招待コード（もこから聞いたもの）</label><input type="text" id="code" autocomplete="off"></div>
       <div class="field"><label for="uname">ID</label><input type="text" id="uname" autocomplete="username" maxlength="20"></div>
@@ -175,6 +188,17 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
   <button type="button" class="primary" id="rcStart">確かめたので録音を始める</button> <button type="button" id="rcCancel">やめる</button>
   <p class="msg" id="rcMsg"></p>
 </div></div>
+<!-- 書き出し（PDF・画像） -->
+<div id="exModal" class="modal" hidden><div class="box" role="dialog" aria-modal="true" aria-labelledby="exTitle">
+  <h2 id="exTitle">ボードを書き出す</h2>
+  <p style="font-size:12px;color:var(--sub);margin:0 0 8px">今見えているボード（振り返り中ならその時点）を、まるごと書き出します。</p>
+  <label class="chk"><input type="radio" name="exFmt" value="pdf" checked> PDF（A4横。ボードの全体）</label>
+  <label class="chk"><input type="radio" name="exFmt" value="png"> 画像（PNG）</label>
+  <label class="chk"><input type="checkbox" id="exTalk"> 文字起こしもつける（PDF のときだけ。2ページ目から）</label>
+  <button type="button" class="primary" id="exGo">書き出す</button> <button type="button" id="exCancel">閉じる</button>
+  <p class="msg" id="exMsg"></p>
+</div></div>
+
 <!-- 使ってみた感想 -->
 <div id="fbModal" class="modal" hidden><div class="box" role="dialog" aria-modal="true" aria-labelledby="fbTitle">
   <h2 id="fbTitle">使ってみてどうだった？</h2>
@@ -236,7 +260,7 @@ svg#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
     <div class="grp editonly"><button type="button" id="addSticky">＋付箋</button><button type="button" id="addText">＋テキスト</button><button type="button" id="arrowBtn">→ 矢印</button>
       <button type="button" class="sw" data-color="yellow" style="background:var(--yellow)" aria-label="黄色"></button><button type="button" class="sw" data-color="pink" style="background:var(--pink)" aria-label="ピンク"></button><button type="button" class="sw" data-color="blue" style="background:var(--blue)" aria-label="青"></button></div>
     <div class="grp"><label style="font-size:13px" class="roHide"><input type="checkbox" id="autoAdopt" checked> AIの付箋をそのまま採用</label></div>
-    <div class="grp"><span id="roBadge" hidden>管理画面から見ています（見るだけ）</span> <button type="button" id="fbBtn" class="roHide">感想を送る</button> <button type="button" id="replayBtn">振り返り</button> <button type="button" id="shareBtn" class="roHide">共有</button></div>
+    <div class="grp"><span id="roBadge" hidden>管理画面から見ています（見るだけ）</span> <button type="button" id="fbBtn" class="roHide">感想を送る</button> <button type="button" id="exportBtn">書き出す</button> <button type="button" id="replayBtn">振り返り</button> <button type="button" id="shareBtn" class="roHide">共有</button></div>
   </div>
   <div id="replayBar" hidden>
     <button type="button" id="rpPlay">▶ 再生</button><select id="rpSpeed" aria-label="再生の速さ"><option value="10">×10</option><option value="30" selected>×30</option><option value="60">×60</option></select>
@@ -299,7 +323,16 @@ $('cvLogout').onclick=async()=>{await api('/logout',{method:'POST'});showAuth();
 
 // ---------- ログイン ----------
 let signupMode=false;
-function setMode(s){signupMode=s;$('tabLogin').classList.toggle('on',!s);$('tabSignup').classList.toggle('on',s);$('codeField').hidden=!s;$('signupConsent').hidden=!s;if(s)fillConsent(document.querySelector('#signupConsent .consentBox'));$('authBtn').textContent=s?'登録してはじめる':'ログイン';$('pw').autocomplete=s?'new-password':'current-password';$('authMsg').textContent='';}
+function setMode(s){signupMode=s;$('reqForm').hidden=true;$('authForm').hidden=false;$('tabReq').classList.remove('on');$('tabLogin').classList.toggle('on',!s);$('tabSignup').classList.toggle('on',s);$('codeField').hidden=!s;$('signupConsent').hidden=!s;if(s)fillConsent(document.querySelector('#signupConsent .consentBox'));$('authBtn').textContent=s?'登録してはじめる':'ログイン';$('pw').autocomplete=s?'new-password':'current-password';$('authMsg').textContent='';}
+function showReq(){$('authForm').hidden=true;$('reqForm').hidden=false;['tabLogin','tabSignup'].forEach(i=>$(i).classList.remove('on'));$('tabReq').classList.add('on');$('rqMsg').textContent='';}
+$('tabReq').onclick=showReq;
+$('reqForm').onsubmit=async e=>{e.preventDefault();$('rqMsg').style.color='';
+  const body={name:$('rqName').value,email:$('rqEmail').value,use_case:$('rqUse').value,n_people:$('rqN').value,note:$('rqNote').value,adult:$('rqAdult').checked,website:$('rqWeb').value};
+  if(!body.adult){$('rqMsg').textContent='いまは、使う人が全員18歳以上の場合だけ使ってもらっています';return;}
+  $('rqBtn').disabled=true;const j=await api('/request_invite',{method:'POST',body});$('rqBtn').disabled=false;
+  if(!j.ok){$('rqMsg').textContent=j.error||'送れませんでした';return;}
+  $('reqForm').querySelectorAll('input[type=text],textarea').forEach(x=>{if(x.id!=='rqN')x.value='';});$('rqAdult').checked=false;
+  $('rqMsg').style.color='var(--ink)';$('rqMsg').textContent='申し込みました！確認して、招待コードをメールで送ります。少し待っていてください。';};
 $('tabLogin').onclick=()=>setMode(false);$('tabSignup').onclick=()=>setMode(true);
 $('authForm').onsubmit=async e=>{e.preventDefault();$('authBtn').disabled=true;$('authMsg').textContent='';
   const body={username:$('uname').value.trim(),password:$('pw').value,code:$('code').value.trim(),agree:$('suAgree').checked,adult:$('suAdult').checked,consent_ver:META.consent_ver};
@@ -307,7 +340,7 @@ $('authForm').onsubmit=async e=>{e.preventDefault();$('authBtn').disabled=true;$
   const j=await api(signupMode?'/signup':'/login',{method:'POST',body});$('authBtn').disabled=false;
   if(!j.ok){$('authMsg').textContent=j.error||'うまくいきませんでした';return;}
   $('pw').value='';route();};
-function showAuth(){show('authView');setMode(/join=/.test(location.hash));if(/join=/.test(location.hash))$('authMsg').textContent='共有されたボードを開くには、ログインか登録をしてください';}
+function showAuth(){show('authView');setMode(/join=/.test(location.hash));if(location.hash==='#request')showReq();if(/join=/.test(location.hash))$('authMsg').textContent='共有されたボードを開くには、ログインか登録をしてください';}
 $('logoutBtn').onclick=async()=>{await api('/logout',{method:'POST'});showAuth();};
 
 // ---------- 一覧 ----------
@@ -648,6 +681,59 @@ $('rcStart').onclick=async()=>{const n=parseInt($('rcN').value.replace(/[０-９
 $('recBtn').onclick=()=>RP?null:(rec.on?stopRec():openRecModal());
 window.addEventListener('beforeunload',e=>{if(rec.on||dirty.size||gone.size){flush();e.preventDefault();e.returnValue='';}});
 
+// ---------- 書き出し：ボードを絵に描き直して PNG／PDF にする（日本語がそのまま出るように、文字も絵として描く） ----------
+const STICKY_BG={yellow:'#fff3a8',pink:'#f7d3ec',blue:'#cfe6ff'};
+function wrapText(ctx,text,maxW){const out=[];let line='';for(const ch of String(text||'')){if(ch==='\n'){out.push(line);line='';continue;}
+  if(ctx.measureText(line+ch).width>maxW&&line){out.push(line);line=ch;}else line+=ch;}if(line)out.push(line);return out;}
+function drawBoardCanvas(maxPx){relayout();const os=Object.values(S.objs);const PAD=40,HEAD=70;
+  if(!os.length)return null;let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  os.forEach(o=>{const w=o.type==='text'?180:SW,h=o.type==='text'?30:SH;x0=Math.min(x0,o.x);y0=Math.min(y0,o.y);x1=Math.max(x1,o.x+w);y1=Math.max(y1,o.y+h);});
+  const W=x1-x0+PAD*2,H=y1-y0+PAD*2+HEAD;const k=Math.min(2,maxPx/Math.max(W,H));
+  const cv=document.createElement('canvas');cv.width=Math.round(W*k);cv.height=Math.round(H*k);const ctx=cv.getContext('2d');ctx.scale(k,k);
+  const FONT='"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif';
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#1e2b3c';ctx.font='bold 22px '+FONT;ctx.fillText(B.title||'GraRec ボード',PAD,PAD+8);
+  ctx.fillStyle='#5b6676';ctx.font='13px '+FONT;ctx.fillText(new Date(RP?RP.T:Date.now()).toLocaleString('ja-JP')+' 時点 ・ GraRec ボード'+(B.rec?` ・ 録音 ${fmt(B.rec)}`:''),PAD,PAD+32);
+  const ox=PAD-x0,oy=PAD+HEAD-y0;
+  // 矢印
+  ctx.strokeStyle='#1e2b3c';ctx.fillStyle='#1e2b3c';ctx.lineWidth=2;
+  S.links.forEach(l=>{const a=rectOf(l.from),b=rectOf(l.to);if(!a||!b)return;const [ax,ay]=edge(a,b.x+b.w/2,b.y+b.h/2),[bx,by]=edge(b,a.x+a.w/2,a.y+a.h/2);
+    ctx.beginPath();ctx.moveTo(ax+ox,ay+oy);ctx.lineTo(bx+ox,by+oy);ctx.stroke();const ang=Math.atan2(by-ay,bx-ax);
+    ctx.beginPath();ctx.moveTo(bx+ox,by+oy);ctx.lineTo(bx+ox-10*Math.cos(ang-0.4),by+oy-10*Math.sin(ang-0.4));ctx.lineTo(bx+ox-10*Math.cos(ang+0.4),by+oy-10*Math.sin(ang+0.4));ctx.closePath();ctx.fill();});
+  os.forEach(o=>{const x=o.x+ox,y=o.y+oy;
+    if(o.type==='text'){ctx.fillStyle='#5b6676';ctx.font='13px '+FONT;ctx.fillText(o.text||'',x+4,y+18);return;}
+    ctx.save();ctx.shadowColor='rgba(0,0,0,.18)';ctx.shadowBlur=4;ctx.shadowOffsetY=1;ctx.fillStyle=STICKY_BG[o.color]||STICKY_BG.yellow;ctx.fillRect(x,y,SW,SH);ctx.restore();
+    if(o.status==='proposal'){ctx.setLineDash([5,4]);ctx.strokeStyle='#2f6fde';ctx.lineWidth=2;ctx.strokeRect(x-2,y-2,SW+4,SH+4);ctx.setLineDash([]);}
+    ctx.fillStyle='#1e2b3c';ctx.font=(o.q?'bold ':'')+'12px '+FONT;const lines=wrapText(ctx,o.text,SW-16).slice(0,6);const lh=16;let ty=y+SH/2-(lines.length*lh)/2+12;
+    ctx.textAlign='center';lines.forEach(t=>{ctx.fillText(t,x+SW/2,ty);ty+=lh;});ctx.textAlign='left';
+    ctx.font='bold 9px '+FONT;if(o.ai){ctx.fillStyle='#2f6fde';ctx.fillText(o.status==='proposal'?'AI 候補':'AI',x+4,y+SH-4);}
+    if(o.time){ctx.fillStyle='#7d7869';ctx.font='9px '+FONT;ctx.textAlign='right';ctx.fillText(o.time,x+SW-4,y+SH-4);ctx.textAlign='left';}});
+  return cv;}
+function talkPages(){const u=RP?B.utts.filter(x=>x.ms&&x.ms<=RP.T):B.utts;if(!u.length)return [];
+  const W=1240,H=1754,M=90,FONT='"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif';const pages=[];let cv,ctx,y;
+  const newPage=()=>{cv=document.createElement('canvas');cv.width=W;cv.height=H;ctx=cv.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#1e2b3c';ctx.font='bold 30px '+FONT;ctx.fillText('会話（文字起こし）'+(pages.length?' つづき':''),M,M);y=M+50;pages.push(cv);};
+  newPage();
+  u.forEach(x=>{ctx.font='22px '+FONT;const head=fmt(x.t)+'  '+(x.who&&x.who!=='話者'?x.who+'：':'');const lines=wrapText(ctx,head+x.text,W-M*2);
+    if(y+lines.length*34>H-M)newPage();ctx.fillStyle='#1e2b3c';lines.forEach(t=>{ctx.fillText(t,M,y);y+=34;});y+=10;});
+  return pages;}
+function saveBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);}
+function loadJsPDF(){return window.jspdf?Promise.resolve():new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';sc.onload=res;sc.onerror=rej;document.head.appendChild(sc);});}
+const safeName=()=>String(B.title||'board').replace(/[\\/:*?"<>|]/g,'_').slice(0,40)+'_'+new Date().toISOString().slice(0,10);
+$('exportBtn').onclick=()=>{$('exMsg').textContent='';$('exMsg').style.color='';$('exModal').hidden=false;};
+$('exCancel').onclick=()=>$('exModal').hidden=true;
+$('exGo').onclick=async()=>{const fmtSel=document.querySelector('input[name=exFmt]:checked').value;$('exGo').disabled=true;$('exMsg').style.color='var(--ink)';$('exMsg').textContent='作っています…';
+  try{const cv=drawBoardCanvas(fmtSel==='png'?6000:4200);if(!cv){$('exMsg').textContent='ボードにまだ何もありません';return;}
+    if(fmtSel==='png'){await new Promise(r=>cv.toBlob(b=>{saveBlob(b,safeName()+'.png');r();},'image/png'));}
+    else{await loadJsPDF();const {jsPDF}=window.jspdf;const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+      const pw=297,ph=210,m=8;const r=Math.min((pw-m*2)/cv.width,(ph-m*2)/cv.height);const w=cv.width*r,h=cv.height*r;
+      pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',(pw-w)/2,(ph-h)/2,w,h);
+      if($('exTalk').checked)talkPages().forEach(pg=>{pdf.addPage('a4','portrait');pdf.addImage(pg.toDataURL('image/jpeg',0.9),'JPEG',0,0,210,297);});
+      pdf.save(safeName()+'.pdf');}
+    $('exMsg').textContent='書き出しました（ダウンロードを見てください）';setTimeout(()=>{$('exModal').hidden=true;},1200);}
+  catch(e){$('exMsg').style.color='';$('exMsg').textContent='書き出せませんでした。ネットにつながっているか確かめて、もう一度試してください';}
+  finally{$('exGo').disabled=false;}};
+
 // ---------- 使ってみた感想 ----------
 const FB={stars:0,stars_ai:0};
 document.querySelectorAll('.stars').forEach(g=>{for(let i=1;i<=5;i++){const b=document.createElement('button');b.type='button';b.textContent='★';b.setAttribute('role','radio');b.setAttribute('aria-label',i+'つ');
@@ -664,7 +750,7 @@ $('fbSend').onclick=async()=>{const body={stars:FB.stars,stars_ai:FB.stars_ai,go
   $('fbSend').disabled=true;const j=await api('/feedback',{method:'POST',body});
   if(!j.ok){$('fbSend').disabled=false;$('fbMsg').textContent=j.error||'送れませんでした';return;}
   $('fbMsg').style.color='var(--ink)';$('fbMsg').textContent='送りました。ありがとう！';if(B&&!$('boardView').hidden)B.fbSent=true;setTimeout(()=>closeFb(true),1200);};
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(!$('fbModal').hidden){if(fbThen&&B)store.set('fbSkip:'+B.id,'1');closeFb(false);}if(!$('recModal').hidden)$('recModal').hidden=true;}});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(!$('exModal').hidden)$('exModal').hidden=true;if(!$('fbModal').hidden){if(fbThen&&B)store.set('fbSkip:'+B.id,'1');closeFb(false);}if(!$('recModal').hidden)$('recModal').hidden=true;}});
 
 // ---------- 画面の切り替え ----------
 async function route(){

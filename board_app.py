@@ -123,6 +123,8 @@ def init_board(app, client, chat_json, data_dir):
             c.execute("ALTER TABLE users ADD COLUMN consent_ver TEXT")
         if "invite_id" not in cols:
             c.execute("ALTER TABLE users ADD COLUMN invite_id INTEGER")
+        c.execute("""CREATE TABLE IF NOT EXISTS invite_requests(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT,
+            use_case TEXT, note TEXT, n_people INTEGER, status TEXT DEFAULT 'new', invite_id INTEGER, created TEXT, done_at TEXT)""")
         c.execute("""CREATE TABLE IF NOT EXISTS feedback(id INTEGER PRIMARY KEY AUTOINCREMENT, user INTEGER, board TEXT,
             stars INTEGER, stars_ai INTEGER, good TEXT, bad TEXT, at TEXT)""")
         c.execute("""CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY AUTOINCREMENT, board TEXT NOT NULL, user INTEGER,
@@ -1129,3 +1131,77 @@ def admin_board_events(bid):
     return jsonify(ok=True, events=[{"type": r["type"], "obj": r["obj"], "before": json.loads(r["before"]) if r["before"] else None,
                                      "after": json.loads(r["after"]) if r["after"] else None, "rec_t": r["rec_t"],
                                      "ms": r["client_ms"], "who": r["username"] or ""} for r in rows])
+
+
+# ---------------- 招待コードの申し込み（だれでも送れる → もこが確認して、招待コードをメールで送る） ----------------
+# 申し込みの名前・メールは連絡のためだけに使い、研究用の書き出しには入れない。送ったら・断ったら、管理画面から消せる
+_req_hits = {}
+
+
+@bp.route("/board/api/request_invite", methods=["POST"])
+def request_invite():
+    if request.headers.get("X-GraRec") != "1":
+        return jsonify(ok=False, error="不正なリクエストです"), 400
+    d = request.get_json(silent=True) or {}
+    if d.get("website"):   # 機械による書き込みよけ（人には見えない欄）
+        return jsonify(ok=True)
+    ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip()
+    now = time.time()
+    hits = [t for t in _req_hits.get(ip, []) if now - t < 3600]
+    if len(hits) >= 5:
+        return jsonify(ok=False, error="短い時間にたくさん送られています。少し時間をおいてください"), 429
+    name = str(d.get("name") or "").strip()[:40]
+    email = str(d.get("email") or "").strip()[:120]
+    use_case = str(d.get("use_case") or "").strip()[:40]
+    note = str(d.get("note") or "").strip()[:500]
+    try:
+        n = max(1, min(50, int(d.get("n_people") or 1)))
+    except (TypeError, ValueError):
+        n = 1
+    if not name or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        return jsonify(ok=False, error="お名前（ニックネームでOK）と、連絡先のメールアドレスを入れてください"), 400
+    if d.get("adult") is not True:
+        return jsonify(ok=False, error="いまは、参加する人が全員18歳以上の場合だけ使ってもらっています"), 400
+    hits.append(now)
+    _req_hits[ip] = hits
+    with _db() as c:
+        c.execute("INSERT INTO invite_requests(name, email, use_case, note, n_people, status, created) VALUES(?,?,?,?,?,?,?)",
+                  (name, email, use_case, note, n, "new", _now()))
+    return jsonify(ok=True)
+
+
+@bp.route("/board/admin/api/requests")
+@_admin_required
+def admin_requests():
+    with _db() as c:
+        rows = c.execute("""SELECT r.*, i.code FROM invite_requests r LEFT JOIN invites i ON i.id=r.invite_id
+            ORDER BY CASE r.status WHEN 'new' THEN 0 ELSE 1 END, r.id DESC""").fetchall()
+    return jsonify(ok=True, requests=[{k: r[k] for k in ("id", "name", "email", "use_case", "note", "n_people", "status",
+                                                         "created", "done_at", "code")} for r in rows])
+
+
+@bp.route("/board/admin/api/requests/<int:rid>", methods=["POST"])
+@_admin_required
+def admin_request_action(rid):
+    d = request.get_json(silent=True) or {}
+    act = d.get("action")
+    with _db() as c:
+        r = c.execute("SELECT * FROM invite_requests WHERE id=?", (rid,)).fetchone()
+        if not r:
+            return jsonify(ok=False, error="見つかりません"), 404
+        if act == "approve":
+            if r["invite_id"]:
+                code = c.execute("SELECT code FROM invites WHERE id=?", (r["invite_id"],)).fetchone()["code"]
+                return jsonify(ok=True, code=code)
+            code = _new_code(c)
+            cur = c.execute("INSERT INTO invites(code, memo, max_users, max_min, active, created) VALUES(?,?,?,?,?,?)",
+                            (code, f"申し込み：{r['name']}（{r['use_case'] or '—'}）", min(10, (r["n_people"] or 1) + 2), 300, 1, _now()))
+            c.execute("UPDATE invite_requests SET status='approved', invite_id=?, done_at=? WHERE id=?", (cur.lastrowid, _now(), rid))
+            return jsonify(ok=True, code=code)
+        if act == "decline":
+            c.execute("UPDATE invite_requests SET status='declined', done_at=? WHERE id=?", (_now(), rid))
+            return jsonify(ok=True)
+        if act == "delete":   # 連絡が終わったら、名前とメールを残さない
+            c.execute("DELETE FROM invite_requests WHERE id=?", (rid,))
+            return jsonify(ok=True)
+    return jsonify(ok=False, error="不明な操作です"), 400

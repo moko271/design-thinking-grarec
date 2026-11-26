@@ -32,6 +32,16 @@ textarea{width:100%;font:inherit;font-size:12px;border:1px solid var(--line);bor
 <h1>招待コードの管理</h1>
 <p class="lead">渡す相手ごとに招待コードを1つ作ります。そのコードで登録できる人数と、録音できる時間の合計に上限をつけられます。共有リンクでボードを見るだけの人にも登録が必要なので、グループで使うなら人数は少し多めにしてください。</p>
 
+<div class="box"><h2>招待コードの申し込み <span id="reqBadge" class="st off"></span></h2>
+  <p class="note">ボードのログイン画面の「招待コードをもらう」（グループLINEなどに貼るなら <code id="reqUrl"></code>）から届いた申し込みです。「承認してコードを作る」を押すと、その人用のコードができて、送るメールの文が出ます。名前とメールは連絡のためだけに使うと書いているので、送り終わったら「消す」を押してください。</p>
+  <div class="tbl"><table><thead><tr><th>日時</th><th>名前・メール</th><th>使う場面</th><th>人数</th><th>ひとこと</th><th>状態</th><th></th></tr></thead><tbody id="rlist"></tbody></table></div>
+  <div id="reqMail" hidden style="margin-top:12px">
+    <p class="note">宛先：<code id="rmTo"></code> <button type="button" id="rmCopyTo">コピー</button>　件名：<code id="rmSub"></code> <button type="button" id="rmCopySub">コピー</button></p>
+    <textarea id="rmBody" rows="14" aria-label="送るメールの本文"></textarea>
+    <button type="button" id="rmCopy">本文をコピー</button> <a id="rmMailto" href="#">メールアプリで開く</a>
+  </div>
+</div>
+
 <div class="box"><h2>新しいコードを作る</h2>
   <form id="mk" class="row">
     <div class="f"><label for="memo">だれに渡すか（メモ。自分しか見ません）</label><input type="text" id="memo" maxlength="60" size="22" placeholder="例：さきちゃん（ゼミのGW）"></div>
@@ -141,5 +151,46 @@ async function loadBoards(){const j=await api('/boards');const L=$('blist');L.in
     const r=td(null);const sp=document.createElement('span');sp.className='st '+(b.research_ok?'on':'off');sp.textContent=b.research_ok?'使う':'使わない';r.appendChild(sp);
     const a=td(null);if(b.research_ok){const l=document.createElement('a');l.href='/board/admin/view/'+encodeURIComponent(b.id)+'#b='+encodeURIComponent(b.id);l.target='_blank';l.rel='noopener';l.textContent='見る';a.appendChild(l);}
     L.appendChild(tr);});}
-load();loadAudio();loadFb();loadBoards();
+$('reqUrl').textContent=URL_BOARD+'#request';
+const copyBtn=(btn,get)=>{btn.onclick=async()=>{try{await navigator.clipboard.writeText(get());btn.textContent='コピーしました';}catch(e){btn.textContent='コピーできませんでした';}setTimeout(()=>btn.textContent='コピー',2000);};};
+function reqMail(r,code){const sub='【GraRec ボード】招待コードをお送りします';
+  const body=`${r.name}さん
+
+GraRec ボードに申し込んでくれてありがとうございます！もこ（宗高萌絵子）です。
+招待コードをお送りします。
+
+リンク：${URL_BOARD}
+招待コード：${code}
+（「新しく登録」から、招待コードを入れて ID とパスワードを決めたら使えます）
+
+・使ったときの文字起こしと付箋は、研究のデータとして使わせてもらいます（名前は出しません。登録のときに説明が出ます）
+・録音する前に、その場にいる人みんなに伝えて、OKをもらってから始めてください
+・参加する人は全員18歳以上でお願いします
+・いっしょに使う人も、同じ招待コードで登録できます（${Math.min(10,(r.n_people||1)+2)}人まで）
+
+使ってみて「ここがよかった」「ここが変だった」があれば、ボードの「感想を送る」から気軽に送ってください。
+わからないことがあれば、このメールに返信してください！
+
+もこ（宗高萌絵子）
+東京都市大学 情報工学部 知能情報工学科 4年`;
+  $('reqMail').hidden=false;$('rmTo').textContent=r.email;$('rmSub').textContent=sub;$('rmBody').value=body;
+  $('rmMailto').href='mailto:'+encodeURIComponent(r.email)+'?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(body);
+  $('reqMail').scrollIntoView({behavior:'smooth',block:'center'});}
+copyBtn($('rmCopyTo'),()=>$('rmTo').textContent);copyBtn($('rmCopySub'),()=>$('rmSub').textContent);
+$('rmCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('rmBody').value);$('rmCopy').textContent='コピーしました';}catch(e){$('rmBody').select();}setTimeout(()=>$('rmCopy').textContent='本文をコピー',2000);};
+async function loadReq(){const j=await api('/requests');const L=$('rlist');L.innerHTML='';const nNew=j.requests.filter(r=>r.status==='new').length;
+  $('reqBadge').textContent=nNew?`新しい申し込み ${nNew}件`:'';
+  if(!j.requests.length){L.innerHTML='<tr><td colspan="7" class="note">まだありません</td></tr>';return;}
+  const ST={new:'未対応',approved:'コード作成済み',declined:'見送り'};
+  j.requests.forEach(r=>{const tr=document.createElement('tr');const td=(t,cls)=>{const d=document.createElement('td');if(cls)d.className=cls;d.textContent=t;tr.appendChild(d);return d;};
+    td(r.created,'num');const nm=td(r.name);const em=document.createElement('div');em.className='users';em.textContent=r.email;nm.appendChild(em);
+    td(r.use_case||'—');td((r.n_people||1)+'人','num');td(r.note||'');
+    const st=td(null);const sp=document.createElement('span');sp.className='st '+(r.status==='new'?'off':'on');sp.textContent=ST[r.status]||r.status;st.appendChild(sp);if(r.code){const c=document.createElement('div');c.className='users';c.textContent=r.code;st.appendChild(c);}
+    const a=td(null);const b=(label,fn,primary)=>{const x=document.createElement('button');x.type='button';x.textContent=label;if(primary)x.className='primary';x.onclick=fn;a.append(x,' ');return x;};
+    if(r.status!=='declined')b(r.code?'メールの文を出す':'承認してコードを作る',async()=>{const k=await api('/requests/'+r.id,{action:'approve'});if(k.ok){reqMail(r,k.code);loadReq();load();}},!r.code);
+    if(r.status==='new')b('見送る',async()=>{await api('/requests/'+r.id,{action:'decline'});loadReq();});
+    const del=b('消す',async()=>{if(del.dataset.sure!=='1'){del.dataset.sure='1';del.textContent='名前とメールを消す';setTimeout(()=>{del.dataset.sure='';del.textContent='消す';},4000);return;}
+      await api('/requests/'+r.id,{action:'delete'});loadReq();});
+    L.appendChild(tr);});}
+load();loadAudio();loadFb();loadBoards();loadReq();
 </script></body></html>
